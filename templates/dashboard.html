@@ -661,21 +661,24 @@
                 <div class="ks-tile-sub">Auto-commit checkpoint: 5m (300s)</div>
             </div>
 
-            <div class="ks-tile">
-                <div class="ks-tile-eyebrow">
-                    <span>GOOGLE DRIVE BUCKET</span>
-                    <span class="ks-badge {% if bucket.drive_authenticated %}ks-badge-patina{% else %}ks-badge-danger{% endif %}">
-                        {% if bucket.drive_authenticated %}LINKED{% else %}DISCONNECTED{% endif %}
-                    </span>
+            <div class="ks-tile" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div class="ks-tile-eyebrow">
+                        <span>GOOGLE DRIVE BUCKET</span>
+                        <span class="ks-badge {% if bucket.drive_authenticated %}ks-badge-patina{% else %}ks-badge-danger{% endif %}">
+                            {% if bucket.drive_authenticated %}LINKED{% else %}DISCONNECTED{% endif %}
+                        </span>
+                    </div>
+                    <div class="ks-tile-value" style="font-size: 1.4rem; margin-top: 6px;">
+                        {% if bucket.drive_authenticated %}
+                        <a href="/mcpd/bucket" style="color: var(--ks-kinpaku); text-decoration: none;">Drive Storage Active ↗</a>
+                        {% else %}
+                        Offline
+                        {% endif %}
+                    </div>
+                    <div class="ks-tile-sub">Backend port 8090 · Authenticated Downloads</div>
                 </div>
-                <div class="ks-tile-value" style="font-size: 1.6rem; margin-top: 6px;">
-                    {% if bucket.drive_authenticated %}
-                    <a href="/mcpd/bucket" style="color: var(--ks-kinpaku); text-decoration: none;">1BSAxYw...0w ↗</a>
-                    {% else %}
-                    Offline
-                    {% endif %}
-                </div>
-                <div class="ks-tile-sub">Backend port 8090 · /bucket/</div>
+                <a href="/mcpd/bucket" class="ks-btn ks-btn-primary" style="margin-top: 12px; width: 100%; height: 32px; justify-content: center; font-size: 0.75rem; text-decoration: none;">Open Bucket & Downloads →</a>
             </div>
         </section>
 

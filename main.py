@@ -148,6 +148,19 @@ def verify_session_token(token: Optional[str]) -> Optional[str]:
         return None
     return username
 
+def normalize_mcpd_url(path: Optional[str]) -> str:
+    """Ensures destination paths are correctly qualified under /mcpd/."""
+    if not path or path.strip() in ("", "/", "/mcpd", "/mcpd/"):
+        return "/mcpd/bucket"
+    clean = path.strip()
+    if clean.startswith("/bucket"):
+        return f"/mcpd{clean}"
+    if clean.startswith("/mcpd"):
+        return clean
+    if clean.startswith("/"):
+        return f"/mcpd{clean}"
+    return f"/mcpd/{clean}"
+
 class AuthenticationRedirect(Exception):
     def __init__(self, redirect_url: str):
         self.redirect_url = redirect_url
@@ -179,7 +192,7 @@ async def require_auth(request: Request) -> str:
     if is_api:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
-    target = path
+    target = normalize_mcpd_url(path)
     if request.url.query:
         target += f"?{request.url.query}"
     raise AuthenticationRedirect(f"/mcpd/login?next={target}")
@@ -369,9 +382,10 @@ async def fetch_bucket_files() -> List[Dict[str, Any]]:
 @app.get("/mcpd/login", response_class=HTMLResponse)
 async def login_page(request: Request, next: Optional[str] = Query(None)):
     """Renders authentication page."""
+    next_dest = normalize_mcpd_url(next) if next else "/mcpd/bucket"
     token = request.cookies.get(SESSION_COOKIE_NAME)
     if verify_session_token(token):
-        return RedirectResponse(url=next or "/mcpd", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=next_dest, status_code=status.HTTP_303_SEE_OTHER)
 
     ip = security_limiter.get_client_ip(request)
     is_locked, remaining = security_limiter.check_lockout(ip)
@@ -385,7 +399,7 @@ async def login_page(request: Request, next: Optional[str] = Query(None)):
     content = template.render(
         request=request,
         error=error_msg,
-        next_url=next or "/mcpd",
+        next_url=next_dest,
         action_url="/mcpd/login"
     )
     return HTMLResponse(content=content)
@@ -399,6 +413,7 @@ async def login_action(
     next: Optional[str] = Form(None),
 ):
     """Processes login credentials with anti-bruteforce progressive delay and IP lockout."""
+    next_dest = normalize_mcpd_url(next) if next else "/mcpd/bucket"
     ip = security_limiter.get_client_ip(request)
     is_locked, remaining = security_limiter.check_lockout(ip)
     if is_locked:
@@ -408,7 +423,7 @@ async def login_action(
         content = template.render(
             request=request,
             error=f"SECURITY LOCKOUT: IP {ip} temporarily locked. Retry in {mins}m {secs}s.",
-            next_url=next or "/mcpd",
+            next_url=next_dest,
             action_url="/mcpd/login"
         )
         return HTMLResponse(content=content, status_code=status.HTTP_429_TOO_MANY_REQUESTS)
@@ -430,7 +445,7 @@ async def login_action(
         content = template.render(
             request=request,
             error=error_msg,
-            next_url=next or "/mcpd",
+            next_url=next_dest,
             action_url="/mcpd/login"
         )
         return HTMLResponse(content=content, status_code=resp_code)
@@ -439,8 +454,7 @@ async def login_action(
     security_limiter.register_success(ip)
     token = create_session_token(AUTH_USERNAME)
 
-    dest = next.strip() if next and next.strip().startswith("/") else "/mcpd"
-    response = RedirectResponse(url=dest, status_code=status.HTTP_303_SEE_OTHER)
+    response = RedirectResponse(url=next_dest, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
