@@ -232,18 +232,5 @@
     "error": "[Errno 17] File exists: '/tmp/tmprx_ra053/projects/comp-test-proj'",
     "duration_seconds": 7200,
     "start_timestamp": 1794926288.695726
-  },
-  {
-    "session_id": "comp_12345",
-    "project_name": "cli-snake",
-    "goal": "build complete game",
-    "duration_hours": 4.0,
-    "status": "running",
-    "success": true,
-    "started_at": "2026-11-17T17:34:53.226421+00:00",
-    "start_timestamp": 1794936893.226421,
-    "duration_seconds": 14400,
-    "expire_timestamp": 1794951293.226421,
-    "expires_at": "2026-11-17T21:34:53.226421+00:00"
   }
 ]
