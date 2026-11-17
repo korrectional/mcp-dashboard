@@ -528,6 +528,7 @@ async def api_dispatch_task(
     project_name: str = Form(...),
     prompt: str = Form(...),
     model: Optional[str] = Form(None),
+    effort: Optional[str] = Form(None),
     user: str = Depends(require_auth),
 ):
     """Dispatches a new task into the background execution queue."""
@@ -537,9 +538,16 @@ async def api_dispatch_task(
         res = queue_task(
             project_name=project_name,
             task=prompt,
-            model=model if model else None
+            model=model.strip() if model and model.strip() else None,
+            effort=effort.strip() if effort and effort.strip() else None,
         )
-        return res
+        if isinstance(res, dict):
+            if "error" in res and not res.get("task_id"):
+                return {"success": False, "error": res["error"]}
+            res_dict = dict(res)
+            res_dict["success"] = True
+            return res_dict
+        return {"success": True, "result": res}
     except Exception as e:
         logger.error("Task dispatch error: %s", e)
         return {"success": False, "error": str(e)}
@@ -556,7 +564,11 @@ async def api_send_task_input(
     from src.server import send_input_to_task
     try:
         res = send_input_to_task(task_id=task_id, input_text=user_input)
-        return res
+        if isinstance(res, dict):
+            res_dict = dict(res)
+            res_dict["success"] = "error" not in res_dict
+            return res_dict
+        return {"success": True, "result": res}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -568,7 +580,11 @@ async def api_cancel_task(task_id: str, user: str = Depends(require_auth)):
     from src.server import cancel_task
     try:
         res = cancel_task(task_id=task_id)
-        return res
+        if isinstance(res, dict):
+            res_dict = dict(res)
+            res_dict["success"] = res_dict.get("cancelled", True)
+            return res_dict
+        return {"success": True, "result": res}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

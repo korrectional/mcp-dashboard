@@ -1039,12 +1039,12 @@
             try {
                 const res = await fetch('/mcpd/api/tasks/dispatch', { method: 'POST', body: form });
                 const data = await res.json();
-                if (data.success) {
+                if (data.success || data.task_id || data.status) {
                     closeDispatchModal();
                     document.getElementById('dispatch-prompt').value = '';
                     refreshLiveStatus();
                 } else {
-                    alert(`Failed to queue task: ${data.error}`);
+                    alert(`Failed to queue task: ${data.error || JSON.stringify(data)}`);
                 }
             } catch (err) {
                 alert(`Error dispatching task: ${err.message}`);
