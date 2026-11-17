@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .env
 .secret_key
+.coverage
+.pytest_cache/

@@ -38,6 +38,16 @@ class TestNormalizeMcpdUrl:
 
 
 class TestSecretKeyAndApiKey:
+    def test_get_or_create_secret_key_creates_new_file_when_missing(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("DASHBOARD_SECRET_KEY", raising=False)
+        target_file = tmp_path / "new_secret_key"
+        assert not target_file.exists()
+        with patch("main.SECRET_KEY_PATH", str(target_file)):
+            key = get_or_create_secret_key()
+            assert target_file.exists()
+            assert target_file.read_text().strip() == key
+            assert len(key) == 64
+
     def test_get_or_create_secret_key_from_env(self, monkeypatch):
         test_key = "custom_env_secret_key_1234567890"
         monkeypatch.setenv("DASHBOARD_SECRET_KEY", test_key)
