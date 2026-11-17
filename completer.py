@@ -158,6 +158,7 @@ class CompletionSession:
                 "started_at": self.started_at,
                 "expires_at": self.expires_at,
                 "elapsed_seconds": self.elapsed_seconds,
+                "elapsed_formatted": self._format_duration(self.elapsed_seconds),
                 "time_remaining_seconds": self.time_remaining_seconds,
                 "time_remaining_formatted": self._format_duration(self.time_remaining_seconds),
                 "duration_hours": round(self.duration_seconds / 3600, 2),
@@ -271,7 +272,7 @@ class CompletionLoopManager:
             logger.info("Started 4-hour completion loop session %s for %s", session_id, clean_name)
             return session.to_dict()
 
-    def get_session(self, identifier: str) -> Optional[CompletionSession]:
+    def get_session(self, identifier: str) -> Optional[Any]:
         """Finds session by session_id or project_name."""
         with self._lock:
             if identifier in self.sessions:
@@ -280,6 +281,18 @@ class CompletionLoopManager:
             for s in reversed(list(self.sessions.values())):
                 if s.project_name == clean:
                     return s
+            completions_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
+            if os.path.isfile(completions_file):
+                try:
+                    with open(completions_file, "r", encoding="utf-8") as f:
+                        file_data = json.load(f)
+                        if isinstance(file_data, list):
+                            for item in file_data:
+                                if isinstance(item, dict):
+                                    if item.get("session_id") == identifier or item.get("project_name") == clean:
+                                        return item
+                except Exception:
+                    pass
         return None
 
     def cancel_session(self, identifier: str) -> Dict[str, Any]:
@@ -287,19 +300,60 @@ class CompletionLoopManager:
         session = self.get_session(identifier)
         if not session:
             return {"success": False, "error": f"No completion session found matching '{identifier}'"}
-        session.cancel()
-        logger.info("Cancelled completion session %s", session.session_id)
-        return {"success": True, "message": f"Session {session.session_id} cancelled.", "session": session.to_dict()}
+        if hasattr(session, "cancel"):
+            session.cancel()
+            s_dict = session.to_dict()
+        else:
+            session["status"] = "cancelled"
+            s_dict = session
+        completions_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
+        if os.path.isfile(completions_file):
+            try:
+                with open(completions_file, "r", encoding="utf-8") as f:
+                    file_data = json.load(f)
+                if isinstance(file_data, list):
+                    for item in file_data:
+                        if isinstance(item, dict) and item.get("session_id") == s_dict.get("session_id"):
+                            item["status"] = "cancelled"
+                    with open(completions_file, "w", encoding="utf-8") as f:
+                        json.dump(file_data, f, indent=2)
+            except Exception:
+                pass
+        sid = s_dict.get("session_id", identifier)
+        logger.info("Cancelled completion session %s", sid)
+        return {"success": True, "message": f"Session {sid} cancelled.", "session": s_dict}
 
     def list_sessions(self, project_name: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
         """Lists completion sessions sorted by start time descending."""
         with self._lock:
             sessions_list = list(self.sessions.values())
+            completions_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
+            if os.path.isfile(completions_file):
+                try:
+                    with open(completions_file, "r", encoding="utf-8") as f:
+                        file_data = json.load(f)
+                        if isinstance(file_data, list):
+                            existing_ids = {s.session_id for s in sessions_list}
+                            for item in file_data:
+                                if isinstance(item, dict) and item.get("session_id") not in existing_ids:
+                                    sessions_list.append(item)
+                except Exception:
+                    pass
+
             if project_name:
-                clean_name = os.path.basename(project_name.strip("/"))
-                sessions_list = [s for s in sessions_list if s.project_name == clean_name]
-            sessions_list.sort(key=lambda s: s.start_timestamp, reverse=True)
-            return [s.to_dict() for s in sessions_list[:limit]]
+                clean_name = os.path.basename(project_name.strip("/")).lower()
+                sessions_list = [
+                    s for s in sessions_list
+                    if (s.project_name if hasattr(s, "project_name") else str(s.get("project_name", "")).lower()) == clean_name
+                ]
+
+            def sort_key(s):
+                if hasattr(s, "start_timestamp"):
+                    return s.start_timestamp
+                return s.get("start_timestamp") or 0
+
+            sessions_list.sort(key=sort_key, reverse=True)
+            return [s.to_dict() if hasattr(s, "to_dict") else s for s in sessions_list[:limit]]
 
     # ==========================================================================
     # Project Inspection Helpers

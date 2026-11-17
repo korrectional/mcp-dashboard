@@ -1240,7 +1240,7 @@
 
                 // Update 4-Hour Autonomous Completion Loops
                 const rawComp = data.completion_sessions || data.completions || data.sessions || [];
-                const compSessions = Array.isArray(rawComp) ? rawComp : (rawComp ? [rawComp] : []);
+                const compSessions = normalizeSessions(rawComp);
                 const activeComps = compSessions.filter(s => s && s.status === 'running');
                 
                 const valCompLoops = document.getElementById('val-comp-loops');
@@ -1254,8 +1254,16 @@
                 
                 const countBadge = document.getElementById('comp-loops-count-badge');
                 if (countBadge) {
-                    countBadge.textContent = `${activeComps.length} ACTIVE`;
-                    countBadge.className = activeComps.length > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-gold';
+                    if (activeComps.length > 0) {
+                        countBadge.textContent = `${activeComps.length} ACTIVE`;
+                        countBadge.className = 'ks-badge ks-badge-patina';
+                    } else if (compSessions.length > 0) {
+                        countBadge.textContent = `${compSessions.length} RECORDED`;
+                        countBadge.className = 'ks-badge ks-badge-gold';
+                    } else {
+                        countBadge.textContent = '0 ACTIVE';
+                        countBadge.className = 'ks-badge ks-badge-gold';
+                    }
                 }
 
                 renderCompletionLoops(compSessions);
@@ -1538,9 +1546,37 @@
             }
         }
 
-        function renderCompletionLoops(sessions) {
+        function normalizeSessions(data) {
+            if (!data) return [];
+            if (Array.isArray(data)) {
+                return data.flatMap(item => {
+                    if (Array.isArray(item)) return item;
+                    if (item && Array.isArray(item.sessions)) return item.sessions;
+                    return item ? [item] : [];
+                });
+            }
+            if (typeof data === 'object') {
+                if (Array.isArray(data.sessions)) return data.sessions;
+                if (data.session_id) return [data];
+            }
+            return [];
+        }
+
+        function formatDuration(seconds) {
+            if (seconds == null || isNaN(seconds)) return '';
+            const s = Math.max(0, Math.floor(seconds));
+            const hours = Math.floor(s / 3600);
+            const mins = Math.floor((s % 3600) / 60);
+            const secs = s % 60;
+            if (hours > 0) return `${hours}h ${mins}m`;
+            return `${mins}m ${secs}s`;
+        }
+
+        function renderCompletionLoops(rawSessions) {
             const container = document.getElementById('comp-loops-container');
             if (!container) return;
+
+            const sessions = normalizeSessions(rawSessions);
 
             if (!sessions || sessions.length === 0) {
                 container.innerHTML = `
@@ -1552,10 +1588,21 @@
             }
 
             container.innerHTML = sessions.map(s => {
+                if (!s || typeof s !== 'object') return '';
                 const isRunning = s.status === 'running';
-                const statusBadge = isRunning 
-                    ? '<span class="ks-badge ks-badge-patina"><span class="ks-pulse" style="margin-right: 4px;"></span>RUNNING (4H LOOP)</span>'
-                    : (s.status === 'completed' ? '<span class="ks-badge ks-badge-gold">COMPLETED</span>' : '<span class="ks-badge ks-badge-neutral">' + escapeHtml(s.status.toUpperCase()) + '</span>');
+                const statusStr = (s.status || 'unknown').toLowerCase();
+                let statusBadge;
+                if (isRunning) {
+                    statusBadge = '<span class="ks-badge ks-badge-patina"><span class="ks-pulse" style="margin-right: 4px;"></span>RUNNING (4H LOOP)</span>';
+                } else if (statusStr === 'completed') {
+                    statusBadge = '<span class="ks-badge ks-badge-gold">COMPLETED</span>';
+                } else if (statusStr === 'cancelled') {
+                    statusBadge = '<span class="ks-badge ks-badge-neutral">CANCELLED</span>';
+                } else if (statusStr === 'failed') {
+                    statusBadge = '<span class="ks-badge ks-badge-danger">FAILED</span>';
+                } else {
+                    statusBadge = '<span class="ks-badge ks-badge-neutral">' + escapeHtml(statusStr.toUpperCase()) + '</span>';
+                }
 
                 const todo = s.todo_progress || { total: 0, completed: 0, percent: 0 };
                 const pct = Math.round(todo.percent || 0);
@@ -1582,12 +1629,23 @@
                     ? '<span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ GitHub CI Active</span>'
                     : '<span class="ks-badge ks-badge-gold" style="font-size: 0.6875rem;">CI Setup Scheduled</span>';
 
-                const timeRem = isRunning ? (s.time_remaining_formatted || 'In progress') : 'Expired / Finished';
-                const elapsed = s.elapsed_formatted || '';
+                let timeRem;
+                if (isRunning) {
+                    timeRem = s.time_remaining_formatted || (s.time_remaining_seconds ? formatDuration(s.time_remaining_seconds) : 'In progress');
+                } else if (statusStr === 'completed') {
+                    timeRem = 'Completed';
+                } else if (statusStr === 'cancelled') {
+                    timeRem = 'Cancelled';
+                } else {
+                    timeRem = 'Finished';
+                }
 
-                const workers = s.workers || {};
+                const elapsed = s.elapsed_formatted || (s.elapsed_seconds != null ? formatDuration(s.elapsed_seconds) : '');
+
+                const workers = s.workers && typeof s.workers === 'object' ? s.workers : {};
                 const workerPills = Object.keys(workers).map(roleKey => {
                     const w = workers[roleKey];
+                    if (!w || typeof w !== 'object') return '';
                     const label = roleKey === 'error_hunter' ? '🐞 Bug Hunter' : (roleKey === 'test_engineer' ? '🧪 Test & UI Eng' : '⚡ Feature Builder');
                     const isWRunning = w.status === 'working' || w.status === 'running';
                     const badgeClass = isWRunning ? 'ks-badge-patina' : (w.status === 'completed' ? 'ks-badge-gold' : 'ks-badge-neutral');
@@ -1595,29 +1653,29 @@
                         ${isWRunning ? '<span class="ks-pulse" style="margin-right: 4px;"></span>' : ''}${label}: ${escapeHtml(w.status || 'idle')}
                         ${w.task_id ? `<a href="javascript:void(0)" onclick="viewTaskLogs('${escapeHtml(w.task_id)}')" style="color: inherit; text-decoration: underline; margin-left: 4px;">#${escapeHtml(w.task_id.slice(-6))}</a>` : ''}
                     </span>`;
-                }).join(' ');
+                }).filter(Boolean).join(' ');
 
                 return `
-                <div class="ks-comp-item ${escapeHtml(s.status)}">
+                <div class="ks-comp-item ${escapeHtml(statusStr)}">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 10px; flex-wrap: wrap;">
                         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                            <span style="font-family: var(--ks-font-mono); font-weight: 600; color: var(--ks-champagne);">${escapeHtml(s.session_id)}</span>
-                            <span class="ks-badge ks-badge-gold">${escapeHtml(s.project_name)}</span>
+                            <span style="font-family: var(--ks-font-mono); font-weight: 600; color: var(--ks-champagne);">${escapeHtml(s.session_id || 'comp_session')}</span>
+                            <span class="ks-badge ks-badge-gold">${escapeHtml(s.project_name || 'project')}</span>
                             ${statusBadge}
                         </div>
                         <div style="display: flex; align-items: center; gap: 12px; font-family: var(--ks-font-mono); font-size: 0.75rem;">
                             <span style="color: var(--ks-kinpaku);" title="Time Remaining in 4h autonomous window">⏱️ ${timeRem}</span>
-                            <span style="color: var(--ks-text-faint);">Elapsed: ${elapsed}</span>
+                            ${elapsed ? `<span style="color: var(--ks-text-faint);">Elapsed: ${elapsed}</span>` : ''}
                         </div>
                     </div>
 
                     <div style="font-size: 0.875rem; color: var(--ks-text-warm); margin-bottom: 8px;">
-                        <strong>Goal:</strong> ${escapeHtml(s.goal)}
+                        <strong>Goal:</strong> ${escapeHtml(s.goal || 'No goal description')}
                     </div>
 
                     <div style="display: flex; align-items: center; justify-content: space-between; font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-muted); margin-bottom: 4px;">
                         <span><strong>Iter #${s.iteration || 1}:</strong> ${escapeHtml(s.last_phase || 'Active')}</span>
-                        <span>TODO: ${todo.completed}/${todo.total} items (${pct}%)</span>
+                        <span>TODO: ${todo.completed || 0}/${todo.total || 0} items (${pct}%)</span>
                     </div>
 
                     <div class="ks-comp-progress-bg" style="margin-bottom: 10px;">
@@ -1625,10 +1683,11 @@
                     </div>
 
                     <!-- Simultaneous Workers Row -->
+                    ${workerPills ? `
                     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
                         <span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint);">Simultaneous Instances:</span>
-                        ${workerPills || '<span class="ks-badge ks-badge-neutral" style="font-size: 0.6875rem;">Spawning...</span>'}
-                    </div>
+                        ${workerPills}
+                    </div>` : ''}
 
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 6px;">
                         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
