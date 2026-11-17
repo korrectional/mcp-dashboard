@@ -721,11 +721,13 @@
 
             <div class="ks-tile" style="display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
+                    {% set comp_list = status.completion_sessions | default([]) %}
+                    {% set active_comp_count = comp_list | selectattr('status', 'equalto', 'running') | list | length %}
                     <div class="ks-tile-eyebrow">
                         <span>4H COMPLETION LOOPS</span>
-                        <span id="badge-comp-loops" class="ks-badge ks-badge-gold">0 RUNNING</span>
+                        <span id="badge-comp-loops" class="ks-badge {% if active_comp_count > 0 %}ks-badge-patina{% else %}ks-badge-gold{% endif %}">{{ active_comp_count }} RUNNING</span>
                     </div>
-                    <div class="ks-tile-value" id="val-comp-loops" style="color: var(--ks-kinpaku);">0</div>
+                    <div class="ks-tile-value" id="val-comp-loops" style="color: var(--ks-kinpaku);">{{ active_comp_count }}</div>
                     <div class="ks-tile-sub">Autonomous self-healing, tests &amp; CI</div>
                 </div>
                 <button onclick="openCompleteModal()" class="ks-btn ks-btn-primary" style="margin-top: 12px; width: 100%; height: 32px; justify-content: center; font-size: 0.75rem; background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;">⚡ Launch 4h Loop</button>
@@ -737,7 +739,7 @@
             <div class="ks-section-head">
                 <div class="ks-section-title">
                     <span>4-HOUR AUTONOMOUS COMPLETION LOOPS</span>
-                    <span id="comp-loops-count-badge" class="ks-badge ks-badge-gold">0 RUNNING</span>
+                    <span id="comp-loops-count-badge" class="ks-badge {% if active_comp_count > 0 %}ks-badge-patina{% else %}ks-badge-gold{% endif %}">{{ active_comp_count }} ACTIVE</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button onclick="openCompleteModal()" class="ks-btn ks-btn-primary" style="background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;">+ Launch 4h Loop</button>
@@ -751,10 +753,94 @@
             </div>
 
             <div id="comp-loops-container">
-                <div class="ks-tile" style="text-align: center; padding: 28px; color: var(--ks-text-muted);">
-                    <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO ACTIVE 4-HOUR COMPLETION LOOPS</div>
-                    <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Launch a completion session to autonomously build, test, and harden an entire application with zero errors.</div>
-                </div>
+                {% if comp_list and comp_list | length > 0 %}
+                    {% for s in comp_list %}
+                    <div class="ks-comp-item {{ s.status }}">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <span style="font-family: var(--ks-font-mono); font-weight: 600; color: var(--ks-champagne);">{{ s.session_id }}</span>
+                                <span class="ks-badge ks-badge-gold">{{ s.project_name }}</span>
+                                {% if s.status == 'running' %}
+                                    <span class="ks-badge ks-badge-patina"><span class="ks-pulse" style="margin-right: 4px;"></span>RUNNING (4H LOOP)</span>
+                                {% elif s.status == 'completed' %}
+                                    <span class="ks-badge ks-badge-gold">COMPLETED</span>
+                                {% else %}
+                                    <span class="ks-badge ks-badge-neutral">{{ s.status | upper }}</span>
+                                {% endif %}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px; font-family: var(--ks-font-mono); font-size: 0.75rem;">
+                                <span style="color: var(--ks-kinpaku);" title="Time Remaining in 4h autonomous window">⏱️ {{ s.time_remaining_formatted or 'In progress' }}</span>
+                                <span style="color: var(--ks-text-faint);">Elapsed: {{ s.elapsed_formatted or '' }}</span>
+                            </div>
+                        </div>
+
+                        <div style="font-size: 0.875rem; color: var(--ks-text-warm); margin-bottom: 8px;">
+                            <strong>Goal:</strong> {{ s.goal }}
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-muted); margin-bottom: 4px;">
+                            <span><strong>Iter #{{ s.iteration or 1 }}:</strong> {{ s.last_phase or 'Active' }}</span>
+                            {% set todo = s.todo_progress or {} %}
+                            <span>TODO: {{ todo.completed | default(0) }}/{{ todo.total | default(0) }} items ({{ (todo.percent | default(0)) | round }}%)</span>
+                        </div>
+
+                        <div class="ks-comp-progress-bg" style="margin-bottom: 10px;">
+                            <div class="ks-comp-progress-bar" style="width: {{ (todo.percent | default(0)) | round }}%;"></div>
+                        </div>
+
+                        <!-- Simultaneous Workers Row -->
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+                            <span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint);">Simultaneous Instances:</span>
+                            {% if s.workers %}
+                                {% for role_key, w in s.workers.items() %}
+                                    <span class="ks-badge {% if w.status in ['working', 'running'] %}ks-badge-patina{% elif w.status == 'completed' %}ks-badge-gold{% else %}ks-badge-neutral{% endif %}" style="font-size: 0.6875rem;">
+                                        {% if w.status in ['working', 'running'] %}<span class="ks-pulse" style="margin-right: 4px;"></span>{% endif %}
+                                        {% if role_key == 'error_hunter' %}🐞 Bug Hunter{% elif role_key == 'test_engineer' %}🧪 Test & UI Eng{% else %}⚡ Feature Builder{% endif %}: {{ w.status | default('idle') }}
+                                        {% if w.task_id %}<a href="javascript:void(0)" onclick="viewTaskLogs('{{ w.task_id }}')" style="color: inherit; text-decoration: underline; margin-left: 4px;">#{{ w.task_id[-6:] }}</a>{% endif %}
+                                    </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="ks-badge ks-badge-neutral" style="font-size: 0.6875rem;">Spawning...</span>
+                            {% endif %}
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 6px;">
+                            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                {% if s.tests_passing is true %}
+                                    <span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ Unit/Integration: 100% Passing</span>
+                                {% elif s.tests_passing is false %}
+                                    <span class="ks-badge ks-badge-danger" style="font-size: 0.6875rem;">✖ Tests: Failing (Self-Healing)</span>
+                                {% else %}
+                                    <span class="ks-badge ks-badge-neutral" style="font-size: 0.6875rem;">Tests: Pending</span>
+                                {% endif %}
+
+                                {% if s.ci_workflow_present %}
+                                    <span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ GitHub CI Active</span>
+                                {% else %}
+                                    <span class="ks-badge ks-badge-gold" style="font-size: 0.6875rem;">CI Setup Scheduled</span>
+                                {% endif %}
+
+                                {% if s.current_task_id %}
+                                    <span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint);">Subtask: <a href="javascript:void(0)" onclick="viewTaskLogs('{{ s.current_task_id }}')" style="color: var(--ks-kinpaku); font-weight: 600;">{{ s.current_task_id }}</a></span>
+                                {% endif %}
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                {% if s.current_task_id %}
+                                    <button onclick="viewTaskLogs('{{ s.current_task_id }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Inspect Subtask</button>
+                                {% endif %}
+                                {% if s.status == 'running' %}
+                                    <button onclick="cancelCompletion('{{ s.session_id }}')" class="ks-btn ks-btn-danger" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Cancel Loop</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="ks-tile" style="text-align: center; padding: 28px; color: var(--ks-text-muted);">
+                        <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO ACTIVE 4-HOUR COMPLETION LOOPS</div>
+                        <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Launch a completion session to autonomously build, test, and harden an entire application with zero errors.</div>
+                    </div>
+                {% endif %}
             </div>
         </section>
 
@@ -1153,8 +1239,9 @@
                 document.getElementById('active-tasks-count').textContent = `${running.length} ACTIVE`;
 
                 // Update 4-Hour Autonomous Completion Loops
-                const compSessions = data.completion_sessions || [];
-                const activeComps = compSessions.filter(s => s.status === 'running');
+                const rawComp = data.completion_sessions || data.completions || data.sessions || [];
+                const compSessions = Array.isArray(rawComp) ? rawComp : (rawComp ? [rawComp] : []);
+                const activeComps = compSessions.filter(s => s && s.status === 'running');
                 
                 const valCompLoops = document.getElementById('val-comp-loops');
                 if (valCompLoops) valCompLoops.textContent = activeComps.length;
@@ -1548,8 +1635,10 @@
                             ${testBadge}
                             ${uiBadge}
                             ${ciBadge}
+                            ${s.current_task_id ? `<span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint);">Subtask: <a href="javascript:void(0)" onclick="viewTaskLogs('${escapeHtml(s.current_task_id)}')" style="color: var(--ks-kinpaku); font-weight: 600;">${escapeHtml(s.current_task_id)}</a></span>` : ''}
                         </div>
                         <div style="display: flex; gap: 8px;">
+                            ${s.current_task_id ? `<button onclick="viewTaskLogs('${escapeHtml(s.current_task_id)}')" class="ks-btn ks-btn-secondary" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Inspect Subtask</button>` : ''}
                             ${isRunning ? `<button onclick="cancelCompletion('${escapeHtml(s.session_id)}')" class="ks-btn ks-btn-danger" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Cancel Loop</button>` : ''}
                         </div>
                     </div>
@@ -1614,8 +1703,8 @@
         }
 
         function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+            if (str === null || str === undefined) return '';
+            return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
         }
 
         // Auto poll every 4 seconds

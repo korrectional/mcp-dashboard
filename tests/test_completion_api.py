@@ -80,3 +80,44 @@ class TestAutonomousCompletionApi:
         response = auth_client.post("/api/complete/comp_1/cancel")
         assert response.status_code == 200
         assert response.json()["success"] is True
+
+    def test_completions_alias_routes(self, auth_client, mock_agyc_server):
+        mock_agyc_server.list_completions.return_value = [
+            {"session_id": "comp_test", "status": "running"}
+        ]
+        res1 = auth_client.get("/api/completions")
+        assert res1.status_code == 200
+        assert res1.json()["count"] == 1
+
+        res2 = auth_client.get("/mcpd/api/completions")
+        assert res2.status_code == 200
+        assert res2.json()["count"] == 1
+
+    def test_completions_store_mcp_sse_parser(self):
+        from completions_store import _parse_mcp_response, _normalize_session_list
+        sse_text = "event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"structuredContent\":{\"result\":[{\"session_id\":\"comp_77f0f420bc\",\"status\":\"running\"}]}}}"
+        parsed = _parse_mcp_response(sse_text)
+        assert isinstance(parsed, list)
+        assert len(parsed) == 1
+        assert parsed[0]["session_id"] == "comp_77f0f420bc"
+
+        norm = _normalize_session_list(parsed)
+        assert len(norm) == 1
+        assert norm[0]["session_id"] == "comp_77f0f420bc"
+
+        # Test single dict normalization
+        single = {"session_id": "comp_single", "status": "running"}
+        norm_single = _normalize_session_list(single)
+        assert len(norm_single) == 1
+        assert norm_single[0]["session_id"] == "comp_single"
+
+    def test_completions_store_active_session_recovery(self):
+        from completions_store import completion_store
+        session = completion_store.get_session("comp_77f0f420bc")
+        assert session is not None
+        assert session["session_id"] == "comp_77f0f420bc"
+        assert session["project_name"] == "opencode-browse-rs"
+        assert session["status"] == "running"
+        assert "h" in session["time_remaining_formatted"]
+        assert session["todo_progress"]["total"] > 0
+        assert session["ci_workflow_present"] is True

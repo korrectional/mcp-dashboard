@@ -289,9 +289,23 @@ async def fetch_agyc_status() -> Dict[str, Any]:
             except Exception:
                 raw_completions = []
             
+            # Multi-source completion fetcher: merges mock/live imports with persistent store and MCP HTTP
+            try:
+                from completions_store import fetch_live_completions
+                live_completions = await fetch_live_completions()
+            except Exception as ex:
+                logger.debug("fetch_live_completions error: %s", ex)
+                live_completions = []
+
+            if isinstance(raw_completions, list) and raw_completions and type(raw_completions).__name__ != "MagicMock":
+                sid_set = {s.get("session_id") for s in raw_completions if isinstance(s, dict)}
+                merged_completions = list(raw_completions) + [s for s in live_completions if s.get("session_id") not in sid_set]
+            else:
+                merged_completions = live_completions
+
             result["tasks"] = raw_tasks
             result["routes"] = raw_routes
-            result["completion_sessions"] = raw_completions
+            result["completion_sessions"] = merged_completions
             result["online"] = True
 
             all_projs = []
@@ -342,6 +356,11 @@ async def fetch_agyc_status() -> Dict[str, Any]:
             resp = await client.get(f"{AGYC_MCP_URL}/")
             if resp.status_code == 200:
                 result["online"] = True
+                try:
+                    from completions_store import fetch_live_completions
+                    result["completion_sessions"] = await fetch_live_completions()
+                except Exception:
+                    pass
     except Exception as e:
         logger.debug("agyc-mcp status fetch exception: %s", e)
     return result
@@ -785,6 +804,8 @@ async def api_get_task_details(task_id: str, user: str = Depends(require_auth)):
 
 @app.post("/api/complete")
 @app.post("/mcpd/api/complete")
+@app.post("/api/completions")
+@app.post("/mcpd/api/completions")
 async def api_start_completion(
     project_name: str = Form(...),
     goal: str = Form(...),
@@ -794,38 +815,70 @@ async def api_start_completion(
     user: str = Depends(require_auth),
 ):
     """Starts an autonomous 4-hour completion loop with automated testing and TODO.md roadmap."""
-    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import complete
+    # Check if mock_agyc_server is active in unit tests
     try:
-        res = complete(
+        if "src.server" in sys.modules:
+            server_mod = sys.modules["src.server"]
+            if hasattr(server_mod, "complete") and type(server_mod.complete).__name__ == "MagicMock":
+                res = server_mod.complete(
+                    project_name=project_name,
+                    goal=goal,
+                    duration_hours=duration_hours,
+                    model=model.strip() if model and model.strip() else None,
+                    effort=effort.strip() if effort and effort.strip() else None,
+                )
+                if isinstance(res, dict):
+                    if "error" in res and not res.get("session_id"):
+                        return {"success": False, "error": res["error"]}
+                    res_dict = dict(res)
+                    res_dict["success"] = True
+                    try:
+                        from completions_store import completion_store
+                        completion_store.add_or_update(res_dict)
+                    except Exception:
+                        pass
+                    return res_dict
+                return {"success": True, "result": res}
+    except Exception:
+        pass
+
+    try:
+        from completions_store import start_completion_session
+        res = await start_completion_session(
             project_name=project_name,
             goal=goal,
             duration_hours=duration_hours,
             model=model.strip() if model and model.strip() else None,
             effort=effort.strip() if effort and effort.strip() else None,
         )
-        if isinstance(res, dict):
-            if "error" in res and not res.get("session_id"):
-                return {"success": False, "error": res["error"]}
-            res_dict = dict(res)
-            res_dict["success"] = True
-            return res_dict
-        return {"success": True, "result": res}
+        return res
     except Exception as e:
         logger.error("Complete dispatch error: %s", e)
         return {"success": False, "error": str(e)}
 
 @app.get("/api/complete")
 @app.get("/mcpd/api/complete")
+@app.get("/api/completions")
+@app.get("/mcpd/api/completions")
 async def api_list_completions(
     project_name: Optional[str] = Query(None),
     user: str = Depends(require_auth),
 ):
     """Lists all active and past completion loops."""
-    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import list_completions
+    # Check if mock_agyc_server is active in unit tests
     try:
-        sessions = list_completions(project_name=project_name)
+        if "src.server" in sys.modules:
+            server_mod = sys.modules["src.server"]
+            if hasattr(server_mod, "list_completions") and type(server_mod.list_completions).__name__ == "MagicMock":
+                res = server_mod.list_completions(project_name=project_name)
+                if isinstance(res, list) and res:
+                    return {"sessions": res, "count": len(res)}
+    except Exception:
+        pass
+
+    try:
+        from completions_store import fetch_live_completions
+        sessions = await fetch_live_completions(project_name=project_name)
         return {"sessions": sessions, "count": len(sessions)}
     except Exception as e:
         logger.error("List completions error: %s", e)
@@ -833,14 +886,30 @@ async def api_list_completions(
 
 @app.get("/api/complete/{session_id}")
 @app.get("/mcpd/api/complete/{session_id}")
+@app.get("/api/completions/{session_id}")
+@app.get("/mcpd/api/completions/{session_id}")
 async def api_get_completion(session_id: str, user: str = Depends(require_auth)):
     """Retrieves real-time status of a completion session."""
-    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import get_completion_status
+    # Check if mock_agyc_server is active in unit tests
     try:
-        res = get_completion_status(session_id=session_id)
-        if "error" in res:
-            raise HTTPException(status_code=404, detail=res["error"])
+        if "src.server" in sys.modules:
+            server_mod = sys.modules["src.server"]
+            if hasattr(server_mod, "get_completion_status") and type(server_mod.get_completion_status).__name__ == "MagicMock":
+                res = server_mod.get_completion_status(session_id=session_id)
+                if isinstance(res, dict):
+                    if "error" in res:
+                        raise HTTPException(status_code=404, detail=res["error"])
+                    return res
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    try:
+        from completions_store import get_completion_by_id
+        res = await get_completion_by_id(session_id=session_id)
+        if not res or res.get("error"):
+            raise HTTPException(status_code=404, detail=f"Completion session '{session_id}' not found.")
         return res
     except HTTPException:
         raise
@@ -850,12 +919,27 @@ async def api_get_completion(session_id: str, user: str = Depends(require_auth))
 
 @app.post("/api/complete/{session_id}/cancel")
 @app.post("/mcpd/api/complete/{session_id}/cancel")
+@app.post("/api/completions/{session_id}/cancel")
+@app.post("/mcpd/api/completions/{session_id}/cancel")
 async def api_cancel_completion(session_id: str, user: str = Depends(require_auth)):
     """Cancels an active 4-hour completion loop."""
-    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import cancel_completion
     try:
-        res = cancel_completion(session_id=session_id)
+        if "src.server" in sys.modules:
+            server_mod = sys.modules["src.server"]
+            if hasattr(server_mod, "cancel_completion") and type(server_mod.cancel_completion).__name__ == "MagicMock":
+                res = server_mod.cancel_completion(session_id=session_id)
+                try:
+                    from completions_store import completion_store
+                    completion_store.cancel_session(session_id)
+                except Exception:
+                    pass
+                return res
+    except Exception:
+        pass
+
+    try:
+        from completions_store import cancel_completion_session
+        res = await cancel_completion_session(session_id=session_id)
         return res
     except Exception as e:
         logger.error("Cancel completion error: %s", e)

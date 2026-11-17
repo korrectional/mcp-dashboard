@@ -1,0 +1,51 @@
+[
+  {
+    "session_id": "comp_77f0f420bc",
+    "project_name": "opencode-browse-rs",
+    "working_dir": "/home/azureadmin/mcp/projects/opencode-browse-rs",
+    "goal": "Rewrite OpenCode Browse (https://github.com/anomalyco/browse) completely in idiomatic, production-grade Rust.",
+    "status": "running",
+    "iteration": 2,
+    "current_task_id": "task_d32878b623",
+    "last_phase": "Automated Test Suite Creation",
+    "started_at": "2026-11-17T06:19:02.622617+00:00",
+    "start_timestamp": 1794896342.622617,
+    "duration_hours": 4.0,
+    "duration_seconds": 14400,
+    "expires_at": "2026-11-17T10:19:02.622617+00:00",
+    "expire_timestamp": 1794910742.622617,
+    "tests_passing": false,
+    "ci_workflow_present": true,
+    "workers": {
+      "error_hunter": {
+        "role": "Error & Bug Hunter",
+        "status": "working",
+        "phase": "Static Analysis & Runtime Error Audit",
+        "iteration": 2,
+        "task_id": "task_d32878b623"
+      },
+      "test_engineer": {
+        "role": "Thorough Test & UI Automation Engineer",
+        "status": "running",
+        "phase": "Authoring & Running Unit, Integration & Actual UI Tests",
+        "iteration": 2,
+        "task_id": "task_d32878b623"
+      },
+      "feature_builder": {
+        "role": "Feature Delivery & Roadmap Lead",
+        "status": "completed",
+        "phase": "GitHub Actions CI Workflow Setup",
+        "iteration": 1,
+        "task_id": "task_85462ccd84"
+      }
+    }
+  },
+  {
+    "session_id": "comp_12345",
+    "project_name": "cli-snake",
+    "goal": "build complete game",
+    "duration_hours": 4.0,
+    "status": "running",
+    "success": true
+  }
+]
