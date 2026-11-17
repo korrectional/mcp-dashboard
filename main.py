@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp_dashboard")
 
-app = FastAPI(title="AGYC Mission Control & Bucketloader Manager", version="2.0.0")
+app = FastAPI(title="AGYC Dashboard & Bucketloader Manager", version="2.0.0")
 
 # Service Configuration
 AGYC_MCP_URL = os.environ.get("AGYC_MCP_URL", "http://127.0.0.1:8001")

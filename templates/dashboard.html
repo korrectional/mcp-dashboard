@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGYC // Mission Control</title>
+    <title>AGYC // DASHBOARD</title>
     <!-- Google Fonts: Alumni Sans (Display/Wordmark), Albert Sans (Body/UI), JetBrains Mono (Telemetry/Code) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -615,7 +615,7 @@
         <div class="ks-nav-inner">
             <a href="/mcpd" class="ks-brand">
                 <div class="ks-mark"></div>
-                <div class="ks-wordmark">AGYC <span>//</span> MISSION CONTROL</div>
+                <div class="ks-wordmark">AGYC <span>//</span> DASHBOARD</div>
             </a>
             <nav class="ks-nav-links">
                 <a href="/mcpd" class="ks-nav-link active">Control</a>
@@ -733,12 +733,14 @@
                         </div>
                     </div>
 
-                    <div class="ks-card-actions">
+                    <div class="ks-card-actions" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%;">
                         {% if p.github_url %}
-                        <a href="{{ p.github_url.split('\n')[0] }}" target="_blank" class="ks-btn ks-btn-secondary" style="flex: 1; font-size: 0.75rem;">GitHub ↗</a>
+                        <a href="{{ p.github_url.split('\n')[0] }}" target="_blank" class="ks-btn ks-btn-secondary" style="width: 100%; height: 32px; justify-content: center; font-size: 0.7rem; padding: 0 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="GitHub">GitHub ↗</a>
+                        {% else %}
+                        <button class="ks-btn ks-btn-secondary" disabled style="width: 100%; height: 32px; justify-content: center; font-size: 0.7rem; padding: 0 4px; text-align: center; white-space: nowrap; opacity: 0.4;">GitHub</button>
                         {% endif %}
-                        <button onclick="triggerCommit('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">Commit Checkpoint</button>
-                        <button onclick="openDispatchForProject('{{ p.name }}')" class="ks-btn ks-btn-primary" style="font-size: 0.75rem;">Dispatch</button>
+                        <button onclick="triggerCommit('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="width: 100%; height: 32px; justify-content: center; font-size: 0.7rem; padding: 0 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Commit Checkpoint">Commit Checkpoint</button>
+                        <button onclick="openDispatchForProject('{{ p.name }}')" class="ks-btn ks-btn-primary" style="width: 100%; height: 32px; justify-content: center; font-size: 0.7rem; padding: 0 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Dispatch Task">Dispatch</button>
                     </div>
                 </div>
                 {% endfor %}
