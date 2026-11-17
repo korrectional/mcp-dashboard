@@ -1,0 +1,102 @@
+[
+  {
+    "session_id": "comp_77f0f420bc",
+    "project_name": "opencode-browse-rs",
+    "working_dir": "/home/azureadmin/mcp/projects/opencode-browse-rs",
+    "goal": "Rewrite OpenCode Browse (https://github.com/anomalyco/browse) completely in idiomatic, production-grade Rust.",
+    "status": "running",
+    "iteration": 2,
+    "current_task_id": "task_d32878b623",
+    "last_phase": "Automated Test Suite Creation",
+    "started_at": "2026-11-17T06:19:02.622617+00:00",
+    "start_timestamp": 1794896342.622617,
+    "duration_hours": 4.0,
+    "duration_seconds": 14400,
+    "expires_at": "2026-11-17T10:19:02.622617+00:00",
+    "expire_timestamp": 1794910742.622617,
+    "tests_passing": false,
+    "ci_workflow_present": true,
+    "workers": {
+      "error_hunter": {
+        "role": "Error & Bug Hunter",
+        "status": "working",
+        "phase": "Static Analysis & Runtime Error Audit",
+        "iteration": 2,
+        "task_id": "task_d32878b623"
+      },
+      "test_engineer": {
+        "role": "Thorough Test & UI Automation Engineer",
+        "status": "running",
+        "phase": "Authoring & Running Unit, Integration & Actual UI Tests",
+        "iteration": 2,
+        "task_id": "task_d32878b623"
+      },
+      "feature_builder": {
+        "role": "Feature Delivery & Roadmap Lead",
+        "status": "completed",
+        "phase": "GitHub Actions CI Workflow Setup",
+        "iteration": 1,
+        "task_id": "task_85462ccd84"
+      }
+    }
+  },
+  {
+    "session_id": "comp_12345",
+    "project_name": "cli-snake",
+    "goal": "build complete game",
+    "duration_hours": 4.0,
+    "status": "running",
+    "success": true
+  },
+  {
+    "session_id": "comp_demo_hist01",
+    "project_name": "animation-renderer",
+    "working_dir": "/home/azureadmin/mcp/projects/animation-renderer",
+    "goal": "Implement How RAM Works 9:16 Instagram Reel animation with deterministic stepping and verified safe zones",
+    "status": "completed",
+    "iteration": 4,
+    "current_task_id": null,
+    "last_phase": "Zero-Error Hardening and Milestone Verification",
+    "started_at": "2026-11-17T02:00:00.000000+00:00",
+    "start_timestamp": 1794880800.0,
+    "duration_hours": 4.0,
+    "duration_seconds": 14400,
+    "expires_at": "2026-11-17T06:00:00.000000+00:00",
+    "expire_timestamp": 1794895200.0,
+    "elapsed_seconds": 3600,
+    "elapsed_formatted": "1h 0m",
+    "time_remaining_seconds": 0,
+    "time_remaining_formatted": "Completed",
+    "tests_passing": true,
+    "ci_workflow_present": true,
+    "ui_tests_detected": false,
+    "ui_tests_passing": null,
+    "ui_tests_runner": "none",
+    "todo_progress": {
+      "total": 12,
+      "completed": 12,
+      "pending": 0,
+      "percent": 100.0
+    },
+    "workers": {
+      "error_hunter": {
+        "role": "Error & Bug Hunter",
+        "status": "completed",
+        "iteration": 4,
+        "phase": "Audit Complete"
+      },
+      "test_engineer": {
+        "role": "Thorough Test & UI Automation Engineer",
+        "status": "completed",
+        "iteration": 4,
+        "phase": "All Tests Passing"
+      },
+      "feature_builder": {
+        "role": "Feature Delivery & Roadmap Lead",
+        "status": "completed",
+        "iteration": 4,
+        "phase": "Features Delivered"
+      }
+    }
+  }
+]

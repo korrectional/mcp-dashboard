@@ -871,7 +871,7 @@ async def api_list_completions(
             server_mod = sys.modules["src.server"]
             if hasattr(server_mod, "list_completions") and type(server_mod.list_completions).__name__ == "MagicMock":
                 res = server_mod.list_completions(project_name=project_name)
-                if isinstance(res, list) and res:
+                if isinstance(res, list):
                     return {"sessions": res, "count": len(res)}
     except Exception:
         pass

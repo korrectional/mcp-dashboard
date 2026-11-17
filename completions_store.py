@@ -24,8 +24,8 @@ AGYC_DATA_DIR = os.environ.get("AGYC_DATA_DIR", "/home/azureadmin/agyc-mcp/data"
 DASHBOARD_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 COMPLETIONS_STORE_PATH = os.path.join(DASHBOARD_DATA_DIR, "completions.json")
 
-# Master client token accepted by agyc-mcp's urlsafe bearer token auto-restore
-AGYC_BEARER_TOKEN = os.environ.get("AGYC_BEARER_TOKEN", "agyc_dashboard_master_client_token_2026")
+# Master client token accepted by agyc-mcp
+AGYC_BEARER_TOKEN = os.environ.get("AGYC_BEARER_TOKEN", os.environ.get("MCP_CLIENT_SECRET", "agyc-tasks-secret-2026"))
 
 SEED_COMPLETION_SESSIONS = [
     {
@@ -184,20 +184,25 @@ class CompletionStore:
         os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
 
         # 1. Load from local file if present
-        if os.path.exists(self.filepath):
-            try:
-                with open(self.filepath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        for s in data:
-                            if isinstance(s, dict) and s.get("session_id"):
-                                self._sessions[s["session_id"]] = s
-                    elif isinstance(data, dict):
-                        for sid, s in data.items():
-                            if isinstance(s, dict) and s.get("session_id"):
-                                self._sessions[s["session_id"]] = s
-            except Exception as e:
-                logger.warning("Failed loading completion sessions from %s: %s", self.filepath, e)
+        local_candidates = [
+            self.filepath,
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
+        ]
+        for candidate in local_candidates:
+            if os.path.exists(candidate):
+                try:
+                    with open(candidate, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        if isinstance(data, list):
+                            for s in data:
+                                if isinstance(s, dict) and s.get("session_id"):
+                                    self._sessions[s["session_id"]] = s
+                        elif isinstance(data, dict):
+                            for sid, s in data.items():
+                                if isinstance(s, dict) and s.get("session_id"):
+                                    self._sessions[s["session_id"]] = s
+                except Exception as e:
+                    logger.warning("Failed loading completion sessions from %s: %s", candidate, e)
 
         # 2. Check agyc data directory files if present
         for candidate_name in ("completions.json", "completion_sessions.json"):
@@ -225,8 +230,12 @@ class CompletionStore:
     def _save(self):
         try:
             os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+            sessions_data = list(self._sessions.values())
             with open(self.filepath, "w", encoding="utf-8") as f:
-                json.dump(list(self._sessions.values()), f, indent=2)
+                json.dump(sessions_data, f, indent=2)
+            root_completions = os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
+            with open(root_completions, "w", encoding="utf-8") as f:
+                json.dump(sessions_data, f, indent=2)
         except Exception as e:
             logger.warning("Failed saving completions to %s: %s", self.filepath, e)
 
