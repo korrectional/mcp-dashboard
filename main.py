@@ -272,20 +272,26 @@ async def fetch_agyc_status() -> Dict[str, Any]:
         "host_services": [],
         "tasks": [],
         "routes": [],
+        "completion_sessions": [],
         "usage": {},
         "online": False
     }
     try:
         sys.path.insert(0, "/home/azureadmin/agyc-mcp")
         try:
-            from src.server import list_projects, list_tasks, list_routes
+            from src.server import list_projects, list_tasks, list_routes, list_completions
             
             raw_projs = list_projects()
             raw_tasks = list_tasks()
             raw_routes = list_routes()
+            try:
+                raw_completions = list_completions()
+            except Exception:
+                raw_completions = []
             
             result["tasks"] = raw_tasks
             result["routes"] = raw_routes
+            result["completion_sessions"] = raw_completions
             result["online"] = True
 
             all_projs = []
@@ -772,6 +778,88 @@ async def api_get_task_details(task_id: str, user: str = Depends(require_auth)):
     if archived:
         return archived
     return {"error": f"Task {task_id} not found"}
+
+# ==============================================================================
+# Autonomous Completion Loop Endpoints (4-Hour Self-Healing Development)
+# ==============================================================================
+
+@app.post("/api/complete")
+@app.post("/mcpd/api/complete")
+async def api_start_completion(
+    project_name: str = Form(...),
+    goal: str = Form(...),
+    duration_hours: float = Form(4.0),
+    model: Optional[str] = Form(None),
+    effort: Optional[str] = Form(None),
+    user: str = Depends(require_auth),
+):
+    """Starts an autonomous 4-hour completion loop with automated testing and TODO.md roadmap."""
+    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
+    from src.server import complete
+    try:
+        res = complete(
+            project_name=project_name,
+            goal=goal,
+            duration_hours=duration_hours,
+            model=model.strip() if model and model.strip() else None,
+            effort=effort.strip() if effort and effort.strip() else None,
+        )
+        if isinstance(res, dict):
+            if "error" in res and not res.get("session_id"):
+                return {"success": False, "error": res["error"]}
+            res_dict = dict(res)
+            res_dict["success"] = True
+            return res_dict
+        return {"success": True, "result": res}
+    except Exception as e:
+        logger.error("Complete dispatch error: %s", e)
+        return {"success": False, "error": str(e)}
+
+@app.get("/api/complete")
+@app.get("/mcpd/api/complete")
+async def api_list_completions(
+    project_name: Optional[str] = Query(None),
+    user: str = Depends(require_auth),
+):
+    """Lists all active and past completion loops."""
+    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
+    from src.server import list_completions
+    try:
+        sessions = list_completions(project_name=project_name)
+        return {"sessions": sessions, "count": len(sessions)}
+    except Exception as e:
+        logger.error("List completions error: %s", e)
+        return {"sessions": [], "error": str(e)}
+
+@app.get("/api/complete/{session_id}")
+@app.get("/mcpd/api/complete/{session_id}")
+async def api_get_completion(session_id: str, user: str = Depends(require_auth)):
+    """Retrieves real-time status of a completion session."""
+    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
+    from src.server import get_completion_status
+    try:
+        res = get_completion_status(session_id=session_id)
+        if "error" in res:
+            raise HTTPException(status_code=404, detail=res["error"])
+        return res
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Get completion status error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/complete/{session_id}/cancel")
+@app.post("/mcpd/api/complete/{session_id}/cancel")
+async def api_cancel_completion(session_id: str, user: str = Depends(require_auth)):
+    """Cancels an active 4-hour completion loop."""
+    sys.path.insert(0, "/home/azureadmin/agyc-mcp")
+    from src.server import cancel_completion
+    try:
+        res = cancel_completion(session_id=session_id)
+        return res
+    except Exception as e:
+        logger.error("Cancel completion error: %s", e)
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/projects/commit")
 @app.post("/mcpd/api/projects/commit")

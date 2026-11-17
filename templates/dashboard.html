@@ -489,6 +489,43 @@
             gap: 16px;
         }
 
+        /* 4-Hour Autonomous Completion Loop Styles */
+        .ks-comp-item {
+            background: var(--ks-raised-lacquer);
+            border: 1px solid var(--ks-rule);
+            border-left: 4px solid var(--ks-kinpaku);
+            border-radius: var(--ks-radius-sm);
+            padding: 20px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .ks-comp-item.completed {
+            border-left-color: var(--ks-patina);
+        }
+
+        .ks-comp-item.cancelled {
+            border-left-color: var(--ks-rule);
+            opacity: 0.85;
+        }
+
+        .ks-comp-progress-bg {
+            width: 100%;
+            height: 7px;
+            background: var(--ks-lacquer-deep);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0 14px 0;
+            border: 1px solid var(--ks-rule);
+        }
+
+        .ks-comp-progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--ks-kinpaku) 0%, var(--ks-patina) 100%);
+            transition: width 0.4s ease;
+        }
+
         /* Terminal Window */
         .ks-terminal {
             background: var(--ks-lacquer-deep);
@@ -622,6 +659,7 @@
                 <a href="/mcpd/bucket" class="ks-nav-link">Bucketloader</a>
                 <a href="https://github.com/korrectional" target="_blank" class="ks-nav-link">GitHub ↗</a>
                 <button onclick="openDispatchModal()" class="ks-btn ks-btn-primary">+ Dispatch Task</button>
+                <button onclick="openCompleteModal()" class="ks-btn ks-btn-primary" style="background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;">⚡ Complete App (4h)</button>
                 <div style="display: flex; align-items: center; gap: 8px; margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--ks-rule);">
                     <span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-patina);" title="Authenticated Operator">● {{ user or 'korrectional' }}</span>
                     <a href="/mcpd/logout" class="ks-btn ks-btn-secondary" style="height: 28px; font-size: 0.6875rem; padding: 0 8px;">Logout</a>
@@ -679,6 +717,44 @@
                     <div class="ks-tile-sub">Backend port 8090 · Authenticated Downloads</div>
                 </div>
                 <a href="/mcpd/bucket" class="ks-btn ks-btn-primary" style="margin-top: 12px; width: 100%; height: 32px; justify-content: center; font-size: 0.75rem; text-decoration: none;">Open Bucket & Downloads →</a>
+            </div>
+
+            <div class="ks-tile" style="display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div class="ks-tile-eyebrow">
+                        <span>4H COMPLETION LOOPS</span>
+                        <span id="badge-comp-loops" class="ks-badge ks-badge-gold">0 RUNNING</span>
+                    </div>
+                    <div class="ks-tile-value" id="val-comp-loops" style="color: var(--ks-kinpaku);">0</div>
+                    <div class="ks-tile-sub">Autonomous self-healing, tests &amp; CI</div>
+                </div>
+                <button onclick="openCompleteModal()" class="ks-btn ks-btn-primary" style="margin-top: 12px; width: 100%; height: 32px; justify-content: center; font-size: 0.75rem; background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;">⚡ Launch 4h Loop</button>
+            </div>
+        </section>
+
+        <!-- 4-Hour Autonomous Completion Loops Section -->
+        <section style="margin-bottom: 36px;">
+            <div class="ks-section-head">
+                <div class="ks-section-title">
+                    <span>4-HOUR AUTONOMOUS COMPLETION LOOPS</span>
+                    <span id="comp-loops-count-badge" class="ks-badge ks-badge-gold">0 RUNNING</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="openCompleteModal()" class="ks-btn ks-btn-primary" style="background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;">+ Launch 4h Loop</button>
+                    <button onclick="refreshLiveStatus()" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem;">↻ Poll Now</button>
+                </div>
+            </div>
+
+            <div style="font-size: 0.75rem; color: var(--ks-text-muted); margin-bottom: 14px; font-family: var(--ks-font-mono); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span>Autonomous continuous engineering: 5-minute cron inspection, automated test suites, bug repairs, GitHub CI workflow tests, and progressive TODO.md execution.</span>
+                <span style="color: var(--ks-text-faint);">Self-commits per milestone · Zero-error guarantee</span>
+            </div>
+
+            <div id="comp-loops-container">
+                <div class="ks-tile" style="text-align: center; padding: 28px; color: var(--ks-text-muted);">
+                    <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO ACTIVE 4-HOUR COMPLETION LOOPS</div>
+                    <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Launch a completion session to autonomously build, test, and harden an entire application with zero errors.</div>
+                </div>
             </div>
         </section>
 
@@ -813,6 +889,7 @@
                         <button onclick="triggerCommit('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="width: 100%; height: 32px; justify-content: center; font-size: 0.7rem; padding: 0 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Commit Checkpoint">Commit Checkpoint</button>
                         <button onclick="openDispatchForProject('{{ p.name }}')" class="ks-btn ks-btn-primary" style="width: 100%; height: 32px; justify-content: center; font-size: 0.7rem; padding: 0 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Dispatch Task">Dispatch</button>
                     </div>
+                    <button onclick="openCompleteForProject('{{ p.name }}')" class="ks-btn ks-btn-primary" style="margin-top: 8px; width: 100%; height: 30px; justify-content: center; font-size: 0.72rem; background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;" title="Launch 4-Hour Autonomous Loop">⚡ Complete App (4h Loop)</button>
                 </div>
                 {% endfor %}
             </div>
@@ -844,6 +921,7 @@
                         <button onclick="triggerCommit('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="flex: 1; font-size: 0.75rem;">Commit Checkpoint</button>
                         <button onclick="openDispatchForProject('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">Task</button>
                     </div>
+                    <button onclick="openCompleteForProject('{{ p.name }}')" class="ks-btn ks-btn-primary" style="margin-top: 8px; width: 100%; height: 30px; justify-content: center; font-size: 0.72rem; background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;" title="Launch 4-Hour Autonomous Loop">⚡ Complete App (4h Loop)</button>
                 </div>
                 {% endfor %}
             </div>
@@ -924,6 +1002,58 @@
                 <div style="display: flex; justify-content: flex-end; gap: 10px;">
                     <button type="button" onclick="closeDispatchModal()" class="ks-btn ks-btn-secondary">Cancel</button>
                     <button type="submit" class="ks-btn ks-btn-primary">Queue & Dispatch Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 4-Hour Autonomous Completion Loop Modal -->
+    <div id="modal-complete" class="ks-modal-overlay">
+        <div class="ks-modal" style="max-width: 600px;">
+            <div class="ks-modal-head">
+                <div style="font-family: var(--ks-font-display); font-size: 1.3rem; color: var(--ks-kinpaku);">⚡ LAUNCH 4-HOUR AUTONOMOUS COMPLETION LOOP</div>
+                <button onclick="closeCompleteModal()" style="background: none; border: none; color: var(--ks-text-muted); cursor: pointer; font-size: 1.2rem;">✕</button>
+            </div>
+            <div style="font-size: 0.8125rem; color: var(--ks-text-muted); margin-bottom: 16px; line-height: 1.45;">
+                Runs an autonomous continuous engineering loop for 4 hours. Every 5 minutes, if the agent stops, it automatically executes test suites (Python, Node, Rust, Go), repairs bugs, writes GitHub Actions CI workflows (<span style="color: var(--ks-patina); font-family: var(--ks-font-mono);">.github/workflows/ci.yml</span>), and implements features tracked in <span style="color: var(--ks-kinpaku); font-family: var(--ks-font-mono);">TODO.md</span> until complete with zero errors.
+            </div>
+            <form id="form-complete" onsubmit="submitComplete(event)">
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Target Project</label>
+                    <select id="complete-project" class="ks-input" style="width: 100%;">
+                        {% for p in status.managed_projects %}
+                        <option value="{{ p.name }}">{{ p.name }} (Managed)</option>
+                        {% endfor %}
+                        {% for p in status.host_services %}
+                        <option value="{{ p.name }}">{{ p.name }} (Host)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Application Goal / Specification</label>
+                    <textarea id="complete-goal" class="ks-input" rows="4" style="width: 100%; resize: vertical;" placeholder="e.g. Build a complete, production-ready terminal snake game with score persistence, high score leaderboards, test suites, CI workflow, and zero runtime errors." required></textarea>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                    <div>
+                        <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Duration (Hours)</label>
+                        <input id="complete-duration" type="number" step="0.5" min="0.5" max="24.0" class="ks-input" style="width: 100%;" value="4.0">
+                    </div>
+                    <div>
+                        <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Model Override</label>
+                        <input id="complete-model" type="text" class="ks-input" style="width: 100%;" placeholder="e.g. default">
+                    </div>
+                    <div>
+                        <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Reasoning Effort</label>
+                        <select id="complete-effort" class="ks-input" style="width: 100%;">
+                            <option value="high" selected>High (Recommended)</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" onclick="closeCompleteModal()" class="ks-btn ks-btn-secondary">Cancel</button>
+                    <button type="submit" class="ks-btn ks-btn-primary" style="background: linear-gradient(135deg, var(--ks-kinpaku) 0%, #d49a00 100%); color: #000; border-color: var(--ks-kinpaku); font-weight: 600;">⚡ Launch 4-Hour Loop</button>
                 </div>
             </form>
         </div>
@@ -1021,6 +1151,27 @@
                 badge.textContent = `${running.length} RUNNING`;
                 badge.className = running.length > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-neutral';
                 document.getElementById('active-tasks-count').textContent = `${running.length} ACTIVE`;
+
+                // Update 4-Hour Autonomous Completion Loops
+                const compSessions = data.completion_sessions || [];
+                const activeComps = compSessions.filter(s => s.status === 'running');
+                
+                const valCompLoops = document.getElementById('val-comp-loops');
+                if (valCompLoops) valCompLoops.textContent = activeComps.length;
+                
+                const badgeCompLoops = document.getElementById('badge-comp-loops');
+                if (badgeCompLoops) {
+                    badgeCompLoops.textContent = `${activeComps.length} RUNNING`;
+                    badgeCompLoops.className = activeComps.length > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-gold';
+                }
+                
+                const countBadge = document.getElementById('comp-loops-count-badge');
+                if (countBadge) {
+                    countBadge.textContent = `${activeComps.length} ACTIVE`;
+                    countBadge.className = activeComps.length > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-gold';
+                }
+
+                renderCompletionLoops(compSessions);
 
                 // If a task just completed, auto refresh past tasks archive
                 if (lastRunningCount > running.length) {
@@ -1297,6 +1448,140 @@
                 refreshLiveStatus();
             } catch (e) {
                 alert(`Cancel failed: ${e.message}`);
+            }
+        }
+
+        function renderCompletionLoops(sessions) {
+            const container = document.getElementById('comp-loops-container');
+            if (!container) return;
+
+            if (!sessions || sessions.length === 0) {
+                container.innerHTML = `
+                    <div class="ks-tile" style="text-align: center; padding: 28px; color: var(--ks-text-muted);">
+                        <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO ACTIVE 4-HOUR COMPLETION LOOPS</div>
+                        <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Launch a completion session to autonomously build, test, and harden an entire application with zero errors.</div>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = sessions.map(s => {
+                const isRunning = s.status === 'running';
+                const statusBadge = isRunning 
+                    ? '<span class="ks-badge ks-badge-patina"><span class="ks-pulse" style="margin-right: 4px;"></span>RUNNING (4H LOOP)</span>'
+                    : (s.status === 'completed' ? '<span class="ks-badge ks-badge-gold">COMPLETED</span>' : '<span class="ks-badge ks-badge-neutral">' + escapeHtml(s.status.toUpperCase()) + '</span>');
+
+                const todo = s.todo_progress || { total: 0, completed: 0, percent: 0 };
+                const pct = Math.round(todo.percent || 0);
+
+                let testBadge = '<span class="ks-badge ks-badge-neutral" style="font-size: 0.6875rem;">Tests: Pending</span>';
+                if (s.tests_passing === true) {
+                    testBadge = '<span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ Tests: 100% Passing</span>';
+                } else if (s.tests_passing === false) {
+                    testBadge = '<span class="ks-badge ks-badge-danger" style="font-size: 0.6875rem;">✖ Tests: Failing (Self-Healing)</span>';
+                }
+
+                const ciBadge = s.ci_workflow_present 
+                    ? '<span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ GitHub CI Active</span>'
+                    : '<span class="ks-badge ks-badge-gold" style="font-size: 0.6875rem;">CI Setup Scheduled</span>';
+
+                const timeRem = isRunning ? (s.time_remaining_formatted || 'In progress') : 'Expired / Finished';
+                const elapsed = s.elapsed_formatted || '';
+
+                return `
+                <div class="ks-comp-item ${escapeHtml(s.status)}">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 10px; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                            <span style="font-family: var(--ks-font-mono); font-weight: 600; color: var(--ks-champagne);">${escapeHtml(s.session_id)}</span>
+                            <span class="ks-badge ks-badge-gold">${escapeHtml(s.project_name)}</span>
+                            ${statusBadge}
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 12px; font-family: var(--ks-font-mono); font-size: 0.75rem;">
+                            <span style="color: var(--ks-kinpaku);" title="Time Remaining in 4h autonomous window">⏱️ ${timeRem}</span>
+                            <span style="color: var(--ks-text-faint);">Elapsed: ${elapsed}</span>
+                        </div>
+                    </div>
+
+                    <div style="font-size: 0.875rem; color: var(--ks-text-warm); margin-bottom: 8px;">
+                        <strong>Goal:</strong> ${escapeHtml(s.goal)}
+                    </div>
+
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-muted); margin-bottom: 4px;">
+                        <span><strong>Phase:</strong> ${escapeHtml(s.last_phase || 'Initializing...')} (Iteration #${s.iteration || 1})</span>
+                        <span>TODO: ${todo.completed}/${todo.total} items (${pct}%)</span>
+                    </div>
+
+                    <div class="ks-comp-progress-bg">
+                        <div class="ks-comp-progress-bar" style="width: ${pct}%;"></div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 6px;">
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                            ${testBadge}
+                            ${ciBadge}
+                            ${s.current_task_id ? `<span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint);">Subtask: <a href="javascript:void(0)" onclick="viewTaskLogs('${escapeHtml(s.current_task_id)}')" style="color: var(--ks-kinpaku);">${escapeHtml(s.current_task_id)}</a></span>` : ''}
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            ${s.current_task_id ? `<button onclick="viewTaskLogs('${escapeHtml(s.current_task_id)}')" class="ks-btn ks-btn-secondary" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Inspect Subtask</button>` : ''}
+                            ${isRunning ? `<button onclick="cancelCompletion('${escapeHtml(s.session_id)}')" class="ks-btn ks-btn-danger" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Cancel Loop</button>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function openCompleteModal() {
+            document.getElementById('modal-complete').style.display = 'flex';
+        }
+
+        function closeCompleteModal() {
+            document.getElementById('modal-complete').style.display = 'none';
+        }
+
+        function openCompleteForProject(projectName) {
+            const select = document.getElementById('complete-project');
+            if (select) {
+                select.value = projectName;
+            }
+            openCompleteModal();
+        }
+
+        async function submitComplete(e) {
+            e.preventDefault();
+            const project = document.getElementById('complete-project').value;
+            const goal = document.getElementById('complete-goal').value;
+            const duration = document.getElementById('complete-duration').value || '4.0';
+            const model = document.getElementById('complete-model').value.trim();
+            const effort = document.getElementById('complete-effort').value;
+
+            const form = new FormData();
+            form.append('project_name', project);
+            form.append('goal', goal);
+            form.append('duration_hours', duration);
+            if (model) form.append('model', model);
+            if (effort) form.append('effort', effort);
+
+            try {
+                const res = await fetch('/mcpd/api/complete', { method: 'POST', body: form });
+                const data = await res.json();
+                if (data.success || data.session_id) {
+                    closeCompleteModal();
+                    document.getElementById('complete-goal').value = '';
+                    refreshLiveStatus();
+                } else {
+                    alert('Failed to launch completion loop: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Error launching completion loop: ' + err.message);
+            }
+        }
+
+        async function cancelCompletion(sessionId) {
+            if (!confirm(`Are you sure you want to cancel completion loop ${sessionId}?`)) return;
+            try {
+                await fetch(`/mcpd/api/complete/${sessionId}/cancel`, { method: 'POST' });
+                refreshLiveStatus();
+            } catch (err) {
+                alert('Error cancelling session: ' + err.message);
             }
         }
 

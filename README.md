@@ -112,7 +112,79 @@ To prevent high data transfer and protect Google Drive API quotas:
 
 ---
 
-## 5. Deployment & Maintenance
+## 5. Autonomous 4-Hour Completion Loop (`complete`)
+
+### Autonomous Continuous Engineering Architecture
+The `complete` command implements a self-healing, long-running (4-hour) continuous development cycle that drives projects from inception or partial progress to a 100% complete application with zero runtime errors, automated test coverage, and GitHub Actions CI.
+
+```
+                  [ complete / complete_project ]
+                                │
+                                ▼
+         ┌──────────────────────────────────────────────┐
+         │ 4-Hour Autonomous Completion Session (14400s) │
+         └──────────────────────┬───────────────────────┘
+                                │
+            ┌───────────────────┴───────────────────┐
+            │ Every 5 Minutes: Cron Inspection Loop │
+            └───────────────────┬───────────────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        ▼                       ▼                       ▼
+  [ Automated Tests ]       [ CI Workflow ]         [ TODO.md ]
+  Python: pytest            .github/workflows/      Structured roadmap
+  Node: npm test            ci.yml verification     Completed vs Pending
+  Rust: cargo test          Multi-step runners      Progress percentage
+  Go: go test               Coverage reporting
+        │                       │                       │
+        └───────────────────────┼───────────────────────┘
+                                │
+            ┌───────────────────┴───────────────────┐
+            │ Formulate Targeted Sub-Turn Directives│
+            │ Phase 1: Bug Fixing & Test Resolution │
+            │ Phase 2: GitHub Actions CI Setup      │
+            │ Phase 3: Automated Test Creation      │
+            │ Phase 4: Feature Implementation       │
+            │ Phase 5: Zero-Error Hardening         │
+            └───────────────────┬───────────────────┘
+                                │
+                                ▼
+            [ Agent Self-Commit via Prompt Directives ]
+            git add . && git commit -m "..." && git push
+```
+
+### Key Engineering Features
+1. **5-Minute Health & Status Loop**:
+   - Runs a background thread monitoring `agyc` execution. If a subtask finishes, crashes, or pauses, the engine inspects repository state immediately and dispatches the next turn.
+2. **Dynamic `TODO.md` Roadmap Generation**:
+   - If `TODO.md` is absent, the engine scans the workspace, analyzes existing code and the user's primary goal, and creates a comprehensive milestone roadmap.
+   - Automatically tracks pending (`- [ ]`) versus completed (`- [x]`) items and computes progress percentages.
+3. **Multi-Language Automated Test Suites**:
+   - Native auto-detection and execution for:
+     - Python: `pytest` / `python -m unittest`
+     - Node.js: `npm test`
+     - Rust: `cargo test`
+     - Go: `go test ./...`
+   - Test failures and stack traces are captured and injected directly into the next turn's prompt for automated self-healing.
+4. **GitHub Actions CI Workflow Generation**:
+   - Verifies presence of `.github/workflows/ci.yml`. If missing, schedules a high-priority subtask instructing the agent to author a production-grade CI pipeline.
+5. **Milestone Self-Commitments**:
+   - The agent stages and commits its own work after completing each milestone (`git add . && git commit -m "..." && git push`). No blind host auto-commit timer is run.
+6. **4-Hour Autonomous Lifespan**:
+   - The loop maintains execution for up to 4.0 hours (14,400 seconds) or until all milestones are resolved and tests pass with 0 errors.
+
+### MCP Tools & REST API Endpoints
+| MCP Tool | HTTP Endpoint | Description |
+| :--- | :--- | :--- |
+| `complete` | `POST /mcpd/api/complete` | Launches a 4-hour autonomous completion loop |
+| `complete_project` | `POST /mcpd/api/complete` | Alias for `complete` |
+| `get_completion_status` | `GET /mcpd/api/complete/{id}` | Real-time status, countdown, TODO %, and test output |
+| `cancel_completion` | `POST /mcpd/api/complete/{id}/cancel` | Gracefully cancels an active completion session |
+| `list_completions` | `GET /mcpd/api/complete` | Lists active and past completion sessions |
+
+---
+
+## 6. Deployment & Maintenance
 
 The service runs under systemd on the host VM:
 ```bash
