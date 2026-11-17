@@ -278,7 +278,7 @@ async def fetch_agyc_status() -> Dict[str, Any]:
     try:
         sys.path.insert(0, "/home/azureadmin/agyc-mcp")
         try:
-            from src.server import list_projects, list_tasks, list_routes, project_registry, command_runner
+            from src.server import list_projects, list_tasks, list_routes
             
             raw_projs = list_projects()
             raw_tasks = list_tasks()
@@ -532,11 +532,11 @@ async def api_dispatch_task(
 ):
     """Dispatches a new task into the background execution queue."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import dispatch_task
+    from src.server import queue_task
     try:
-        res = dispatch_task(
+        res = queue_task(
             project_name=project_name,
-            prompt=prompt,
+            task=prompt,
             model=model if model else None
         )
         return res
@@ -553,9 +553,9 @@ async def api_send_task_input(
 ):
     """Sends interactive reply to a waiting subagent."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import send_task_input
+    from src.server import send_input_to_task
     try:
-        res = send_task_input(task_id=task_id, input_text=user_input)
+        res = send_input_to_task(task_id=task_id, input_text=user_input)
         return res
     except Exception as e:
         return {"success": False, "error": str(e)}
