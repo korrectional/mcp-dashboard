@@ -380,7 +380,7 @@ class CompletionLoopManager:
         logger.info("Cancelled completion session %s", session.session_id)
         return {"success": True, "message": f"Session {session.session_id} cancelled.", "session": session.to_dict()}
 
-    def list_sessions(self, project_name: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+    def list_sessions(self, project_name: Optional[str] = None, limit: int = 4) -> List[Dict[str, Any]]:
         """Lists completion sessions sorted by start time descending."""
         with self._lock:
             sessions_list = list(self.sessions.values())
