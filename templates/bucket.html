@@ -428,6 +428,10 @@
                 <a href="/mcpd/bucket" class="ks-nav-link active">Bucketloader</a>
                 <a href="https://kanevskyy.dev/bucket/health" target="_blank" class="ks-nav-link">Health API ↗</a>
                 <button onclick="openCreateModal()" class="ks-btn ks-btn-primary">+ Create Text/Code</button>
+                <div style="display: flex; align-items: center; gap: 8px; margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--ks-rule);">
+                    <span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-patina);" title="Authenticated Operator">● {{ user or 'korrectional' }}</span>
+                    <a href="/mcpd/logout" class="ks-btn ks-btn-secondary" style="height: 28px; font-size: 0.6875rem; padding: 0 8px;">Logout</a>
+                </div>
             </nav>
         </div>
     </header>
@@ -510,7 +514,7 @@
                         {% for f in files %}
                         <tr>
                             <td>
-                                <div class="ks-file-name">{{ f.name }}</div>
+                                <div class="ks-file-name">{{ f.display_name or f.name }}</div>
                                 <div style="font-size: 0.6875rem; color: var(--ks-text-faint); font-family: var(--ks-font-mono);">ID: {{ f.id }}</div>
                             </td>
                             <td>
@@ -528,10 +532,11 @@
                             <td style="text-align: right;">
                                 <div style="display: inline-flex; gap: 8px;">
                                     {% if f.mimeType != 'application/vnd.google-apps.folder' %}
-                                    <button onclick="editFileContent('{{ f.id }}', '{{ f.name }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">Edit</button>
-                                    <a href="https://kanevskyy.dev/bucket/files/{{ f.id }}" target="_blank" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">Download</a>
+                                    <button onclick="editFileContent('{{ f.id }}', '{{ f.display_name or f.name }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;">Edit</button>
+                                    <a href="/mcpd/api/bucket/files/{{ f.id }}/download?filename={{ f.display_name or f.name }}" download="{{ f.name }}" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; padding: 4px 10px; color: var(--ks-kinpaku);" title="Download file to local machine">Download ↓</a>
+                                    <a href="https://kanevskyy.dev/bucket/files/{{ f.id }}" target="_blank" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; padding: 4px 10px;" title="Preview / stream in browser">Stream ↗</a>
                                     {% endif %}
-                                    <button onclick="deleteFile('{{ f.id }}', '{{ f.name }}')" class="ks-btn ks-btn-danger" style="font-size: 0.75rem; padding: 4px 10px;">Delete</button>
+                                    <button onclick="deleteFile('{{ f.id }}', '{{ f.display_name or f.name }}')" class="ks-btn ks-btn-danger" style="font-size: 0.75rem; padding: 4px 10px;">Delete</button>
                                 </div>
                             </td>
                         </tr>

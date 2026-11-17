@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGYC // AUTHENTICATION</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600;700&family=Alumni+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ks-lacquer-black: oklch(7% 0.006 95);     /* #100f0e - warm ground */
+            --ks-lacquer-deep: oklch(4% 0.004 95);      /* #070606 - deepest well */
+            --ks-raised-lacquer: oklch(11% 0.006 95);   /* #161514 - panel */
+            --ks-graphite: oklch(15% 0.008 95);         /* #211f1e - input ground */
+            --ks-graphite-2: oklch(19% 0.008 95);       /* #2b2826 */
+            
+            --ks-kinpaku: oklch(84% 0.19 80.46);        /* #f5c542 - brand gold */
+            --ks-kinpaku-vivid: oklch(87% 0.20 85);     /* #ffd645 */
+            --ks-kinpaku-rich: oklch(77% 0.13 82);      /* active border */
+            --ks-on-gold: oklch(14% 0.018 95);          /* #181613 - dark text on gold */
+
+            --ks-patina: oklch(70% 0.12 188);           /* #45b5a5 - verdigris */
+            --ks-champagne: oklch(91% 0 0);             /* #e8e8e8 */
+            --ks-text-warm: oklch(88% 0 0);             /* #dedede */
+            --ks-text-muted: oklch(72% 0 0);            /* #b3b3b3 */
+            --ks-text-faint: oklch(62% 0 0);            /* #999999 */
+            --ks-vermilion: oklch(58% 0.15 35);         /* #d94e34 - error */
+
+            --ks-rule: oklch(78% 0 0 / 0.14);
+            --ks-rule-gold: oklch(74% 0.09 82 / 0.5);
+
+            --ks-font: "Albert Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --ks-font-display: "Alumni Sans", "Albert Sans", sans-serif;
+            --ks-font-mono: "JetBrains Mono", SFMono-Regular, Consolas, monospace;
+
+            --ks-radius-xs: 2px;
+            --ks-radius-sm: 4px;
+            --ks-radius-md: 6px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--ks-lacquer-black);
+            color: var(--ks-text-warm);
+            font-family: var(--ks-font);
+            font-size: 0.9375rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            background-image: 
+                radial-gradient(circle at 50% 20%, rgba(245, 197, 66, 0.05) 0%, transparent 60%),
+                linear-gradient(to bottom, var(--ks-lacquer-deep), var(--ks-lacquer-black));
+        }
+
+        .ks-login-card {
+            background: var(--ks-raised-lacquer);
+            border: 1px solid var(--ks-rule);
+            border-top: 2px solid var(--ks-kinpaku);
+            border-radius: var(--ks-radius-md);
+            max-width: 420px;
+            width: 100%;
+            padding: 36px 32px;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
+        }
+
+        .ks-brand-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .ks-mark {
+            width: 16px;
+            height: 16px;
+            background: var(--ks-kinpaku);
+            border-radius: var(--ks-radius-xs);
+            box-shadow: 0 0 12px rgba(245, 197, 66, 0.4);
+            flex-shrink: 0;
+        }
+
+        .ks-wordmark {
+            font-family: var(--ks-font-display);
+            font-size: 1.6rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: var(--ks-champagne);
+            text-transform: uppercase;
+        }
+
+        .ks-wordmark span {
+            color: var(--ks-kinpaku);
+        }
+
+        .ks-subtitle {
+            font-size: 0.8125rem;
+            color: var(--ks-text-muted);
+            margin-bottom: 28px;
+            line-height: 1.5;
+        }
+
+        .ks-form-group {
+            margin-bottom: 20px;
+        }
+
+        .ks-form-label {
+            display: block;
+            font-family: var(--ks-font-mono);
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--ks-text-muted);
+            margin-bottom: 8px;
+        }
+
+        .ks-input {
+            width: 100%;
+            background: var(--ks-graphite);
+            border: 1px solid var(--ks-rule);
+            border-radius: var(--ks-radius-xs);
+            color: var(--ks-champagne);
+            font-family: var(--ks-font-mono);
+            font-size: 0.875rem;
+            padding: 10px 14px;
+            transition: all 0.15s ease;
+            outline: none;
+        }
+
+        .ks-input:focus {
+            border-color: var(--ks-rule-gold);
+            box-shadow: 0 0 0 1px var(--ks-kinpaku);
+            background: var(--ks-graphite-2);
+        }
+
+        .ks-btn-submit {
+            width: 100%;
+            height: 42px;
+            background: var(--ks-kinpaku);
+            color: var(--ks-on-gold);
+            border: 1px solid var(--ks-kinpaku-rich);
+            border-radius: var(--ks-radius-xs);
+            font-family: var(--ks-font-mono);
+            font-size: 0.8125rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .ks-btn-submit:hover {
+            background: var(--ks-kinpaku-vivid);
+            box-shadow: 0 4px 14px rgba(245, 197, 66, 0.3);
+        }
+
+        .ks-alert {
+            background: rgba(217, 78, 52, 0.12);
+            border: 1px solid rgba(217, 78, 52, 0.35);
+            color: var(--ks-vermilion);
+            border-radius: var(--ks-radius-xs);
+            padding: 12px 14px;
+            font-size: 0.8125rem;
+            margin-bottom: 24px;
+            font-family: var(--ks-font-mono);
+            line-height: 1.4;
+        }
+
+        .ks-security-banner {
+            margin-top: 24px;
+            padding-top: 18px;
+            border-top: 1px solid var(--ks-rule);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: var(--ks-font-mono);
+            font-size: 0.6875rem;
+            color: var(--ks-text-faint);
+        }
+
+        .ks-lock-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--ks-patina);
+        }
+
+        .ks-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--ks-patina);
+            box-shadow: 0 0 6px var(--ks-patina);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ks-login-card">
+        <div class="ks-brand-header">
+            <div class="ks-mark"></div>
+            <div class="ks-wordmark">AGYC <span>//</span> ACCESS</div>
+        </div>
+
+        <p class="ks-subtitle">
+            Authenticated access required for system telemetry, slash command dispatch, and Bucketloader file operations.
+        </p>
+
+        {% if error %}
+        <div class="ks-alert">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ action_url or '/mcpd/login' }}">
+            <input type="hidden" name="next" value="{{ next_url or '/mcpd' }}">
+
+            <div class="ks-form-group">
+                <label class="ks-form-label" for="username">Operator Identity</label>
+                <input class="ks-input" type="text" id="username" name="username" placeholder="Username" required autofocus autocomplete="username">
+            </div>
+
+            <div class="ks-form-group">
+                <label class="ks-form-label" for="password">Passkey</label>
+                <input class="ks-input" type="password" id="password" name="password" placeholder="••••••••••••" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" class="ks-btn-submit">
+                <span>Authenticate Session</span>
+                <span>→</span>
+            </button>
+        </form>
+
+        <div class="ks-security-banner">
+            <div class="ks-lock-indicator">
+                <span class="ks-dot"></span>
+                <span>ANTI-BRUTEFORCE ACTIVE</span>
+            </div>
+            <span>IP LOCKOUT ENFORCED</span>
+        </div>
+    </div>
+
+</body>
+</html>

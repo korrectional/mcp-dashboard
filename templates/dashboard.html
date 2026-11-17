@@ -622,6 +622,10 @@
                 <a href="/mcpd/bucket" class="ks-nav-link">Bucketloader</a>
                 <a href="https://github.com/korrectional" target="_blank" class="ks-nav-link">GitHub ↗</a>
                 <button onclick="openDispatchModal()" class="ks-btn ks-btn-primary">+ Dispatch Task</button>
+                <div style="display: flex; align-items: center; gap: 8px; margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--ks-rule);">
+                    <span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-patina);" title="Authenticated Operator">● {{ user or 'korrectional' }}</span>
+                    <a href="/mcpd/logout" class="ks-btn ks-btn-secondary" style="height: 28px; font-size: 0.6875rem; padding: 0 8px;">Logout</a>
+                </div>
             </nav>
         </div>
     </header>

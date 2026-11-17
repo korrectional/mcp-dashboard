@@ -2,11 +2,15 @@ import os
 import sys
 import json
 import time
+import hmac
+import hashlib
+import secrets
 import logging
+import asyncio
 import subprocess
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 import httpx
-from fastapi import FastAPI, Request, Response, Form, File, UploadFile, HTTPException, Query, status
+from fastapi import FastAPI, Request, Response, Form, File, UploadFile, HTTPException, Query, Header, Depends, status
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader
 
@@ -16,9 +20,174 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp_dashboard")
 
-app = FastAPI(title="AGYC Dashboard & Bucketloader Manager", version="2.0.0")
+app = FastAPI(title="AGYC Dashboard & Bucketloader Manager", version="2.1.0")
 
+# ==============================================================================
+# Security & Authentication Configuration
+# ==============================================================================
+
+AUTH_USERNAME = os.environ.get("DASHBOARD_USERNAME", "korrectional")
+AUTH_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "Minegame.1")
+SESSION_COOKIE_NAME = "agyc_session"
+SESSION_MAX_AGE = 7 * 86400  # 7 days in seconds
+
+SECRET_KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".secret_key")
+
+def get_or_create_secret_key() -> str:
+    env_key = os.environ.get("DASHBOARD_SECRET_KEY")
+    if env_key:
+        return env_key.strip()
+    if os.path.exists(SECRET_KEY_PATH):
+        try:
+            with open(SECRET_KEY_PATH, "r", encoding="utf-8") as f:
+                k = f.read().strip()
+                if k:
+                    return k
+        except Exception:
+            pass
+    new_key = secrets.token_hex(32)
+    try:
+        with open(SECRET_KEY_PATH, "w", encoding="utf-8") as f:
+            f.write(new_key)
+    except Exception:
+        pass
+    return new_key
+
+SECRET_KEY = get_or_create_secret_key()
+
+class SecurityRateLimiter:
+    """Anti-bruteforce progressive backoff and IP lockout protection."""
+    MAX_ATTEMPTS = 5
+    LOCKOUT_DURATION = 900  # 15 minutes in seconds
+
+    def __init__(self):
+        # ip -> {"attempts": int, "lockout_until": float, "last_attempt": float}
+        self.records: Dict[str, Dict[str, Any]] = {}
+
+    def get_client_ip(self, request: Request) -> str:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            return xff.split(",")[0].strip()
+        x_real = request.headers.get("x-real-ip")
+        if x_real:
+            return x_real.strip()
+        if request.client and request.client.host:
+            return request.client.host
+        return "127.0.0.1"
+
+    def check_lockout(self, ip: str) -> Tuple[bool, int]:
+        rec = self.records.get(ip)
+        if not rec:
+            return False, 0
+        lockout_until = rec.get("lockout_until", 0)
+        now = time.time()
+        if now < lockout_until:
+            remaining = int(lockout_until - now)
+            return True, remaining
+        if lockout_until > 0 and now >= lockout_until:
+            self.records.pop(ip, None)
+        return False, 0
+
+    async def register_failure(self, ip: str) -> Tuple[int, int, float]:
+        """
+        Records a failed attempt. Calculates progressive exponential backoff.
+        Returns (attempt_count, remaining_attempts_before_lockout, delay_seconds).
+        """
+        now = time.time()
+        rec = self.records.get(ip)
+        if not rec or (now - rec.get("last_attempt", 0) > 3600):
+            rec = {"attempts": 1, "lockout_until": 0, "last_attempt": now}
+        else:
+            rec["attempts"] += 1
+            rec["last_attempt"] = now
+
+        count = rec["attempts"]
+        delay = min(8.0, float(2 ** (count - 1)))
+
+        if count >= self.MAX_ATTEMPTS:
+            rec["lockout_until"] = now + self.LOCKOUT_DURATION
+            remaining = 0
+        else:
+            remaining = self.MAX_ATTEMPTS - count
+
+        self.records[ip] = rec
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+        return count, remaining, delay
+
+    def register_success(self, ip: str):
+        self.records.pop(ip, None)
+
+security_limiter = SecurityRateLimiter()
+
+def create_session_token(username: str) -> str:
+    ts = str(int(time.time()))
+    payload = f"{username}:{ts}"
+    sig = hmac.new(SECRET_KEY.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{payload}:{sig}"
+
+def verify_session_token(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
+    parts = token.split(":")
+    if len(parts) != 3:
+        return None
+    username, ts_str, sig = parts
+    try:
+        ts = int(ts_str)
+    except ValueError:
+        return None
+    if time.time() - ts > SESSION_MAX_AGE:
+        return None
+    payload = f"{username}:{ts_str}"
+    expected_sig = hmac.new(SECRET_KEY.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    if not secrets.compare_digest(sig, expected_sig):
+        return None
+    if not secrets.compare_digest(username, AUTH_USERNAME):
+        return None
+    return username
+
+class AuthenticationRedirect(Exception):
+    def __init__(self, redirect_url: str):
+        self.redirect_url = redirect_url
+
+@app.exception_handler(AuthenticationRedirect)
+async def auth_redirect_handler(request: Request, exc: AuthenticationRedirect):
+    return RedirectResponse(url=exc.redirect_url, status_code=status.HTTP_303_SEE_OTHER)
+
+async def require_auth(request: Request) -> str:
+    """Dependency that ensures user is authenticated, redirecting browser requests or returning 401."""
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    user = verify_session_token(token)
+    if user:
+        return user
+
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        bearer_token = auth_header[7:].strip()
+        user = verify_session_token(bearer_token)
+        if user:
+            return user
+
+    path = request.url.path
+    is_api = (
+        path.startswith("/api/")
+        or path.startswith("/mcpd/api/")
+        or "application/json" in request.headers.get("accept", "")
+    )
+    if is_api:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+    target = path
+    if request.url.query:
+        target += f"?{request.url.query}"
+    raise AuthenticationRedirect(f"/mcpd/login?next={target}")
+
+# ==============================================================================
 # Service Configuration
+# ==============================================================================
+
 AGYC_MCP_URL = os.environ.get("AGYC_MCP_URL", "http://127.0.0.1:8001")
 BUCKET_URL = os.environ.get("BUCKET_URL", "http://127.0.0.1:8090")
 MCP_PROJECTS_ROOT = os.environ.get("MCP_PROJECTS_ROOT", "/home/azureadmin/mcp/projects")
@@ -65,17 +234,14 @@ def _get_git_info(project_path: str) -> Dict[str, Any]:
     
     info["has_git"] = True
     try:
-        # Branch
         b_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=project_path, capture_output=True, text=True, timeout=2)
         if b_res.returncode == 0 and b_res.stdout.strip():
             info["branch"] = b_res.stdout.strip()
         
-        # Last commit
         c_res = subprocess.run(["git", "log", "-1", "--format=%h - %s (%cr)"], cwd=project_path, capture_output=True, text=True, timeout=2)
         if c_res.returncode == 0 and c_res.stdout.strip():
             info["commit"] = c_res.stdout.strip()
         
-        # Status / uncommitted changes
         s_res = subprocess.run(["git", "status", "--porcelain"], cwd=project_path, capture_output=True, text=True, timeout=2)
         if s_res.returncode == 0:
             lines = [l for l in s_res.stdout.strip().splitlines() if l.strip()]
@@ -99,43 +265,28 @@ async def fetch_agyc_status() -> Dict[str, Any]:
     try:
         sys.path.insert(0, "/home/azureadmin/agyc-mcp")
         try:
-            from src.server import list_projects, list_tasks, list_routes, get_agyc_usage
-            raw_projects = list_projects()
-            result["tasks"] = list_tasks(limit=30)
-            result["routes"] = list_routes()
-            try:
-                result["usage"] = get_agyc_usage(timeout=5)
-            except Exception:
-                result["usage"] = {}
+            from src.server import list_projects, list_tasks, list_routes, project_registry, command_runner
+            
+            raw_projs = list_projects()
+            raw_tasks = list_tasks()
+            raw_routes = list_routes()
+            
+            result["tasks"] = raw_tasks
+            result["routes"] = raw_routes
             result["online"] = True
 
-            # Process and categorize projects
+            all_projs = []
             managed = []
             host = []
-            all_projs = []
 
-            for p in raw_projects:
+            for p in raw_projs:
+                p_copy = dict(p)
                 path = p.get("path", "")
                 name = p.get("name", "")
 
-                # Filter out invalid / phantom Windows paths on Linux
-                if os.name != "nt" and (":\\" in path or path.startswith("C:")):
-                    continue
-                if path and not os.path.exists(path):
-                    continue
+                git_info = _get_git_info(path)
+                p_copy.update(git_info)
 
-                # Enrich with live git data
-                git_data = _get_git_info(path)
-                p_copy = dict(p)
-                p_copy.update({
-                    "git": git_data,
-                    "branch": git_data["branch"],
-                    "commit": git_data["commit"],
-                    "dirty": git_data["dirty"],
-                    "dirty_count": git_data["dirty_count"]
-                })
-
-                # Determine if project is dedicated managed project
                 is_managed = (
                     not p.get("auto_discovered", False)
                     or path.startswith(MCP_PROJECTS_ROOT)
@@ -149,7 +300,6 @@ async def fetch_agyc_status() -> Dict[str, Any]:
                 else:
                     host.append(p_copy)
 
-            # Sort managed projects alphabetically
             managed.sort(key=lambda x: x["name"])
             host.sort(key=lambda x: x["name"])
 
@@ -160,7 +310,6 @@ async def fetch_agyc_status() -> Dict[str, Any]:
         except Exception as e:
             logger.warning("Direct import exception: %s", e)
 
-        # HTTP Fallback
         async with httpx.AsyncClient(timeout=4.0) as client:
             resp = await client.get(f"{AGYC_MCP_URL}/")
             if resp.status_code == 200:
@@ -182,19 +331,134 @@ async def fetch_bucket_health() -> Dict[str, Any]:
         return {"status": "error", "drive_authenticated": False, "error": str(e)}
 
 async def fetch_bucket_files() -> List[Dict[str, Any]]:
-    """Fetch stored files from Google Drive bucket."""
+    """Fetch stored files from Google Drive bucket, including files in subfolders."""
     api_key = get_bucket_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
     url = f"{BUCKET_URL}/files"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url, headers=headers)
-            if resp.status_code == 200:
-                return resp.json()
-            return []
+            if resp.status_code != 200:
+                return []
+            items = resp.json()
+            all_files = []
+            for item in items:
+                all_files.append(item)
+                if item.get("mimeType") == "application/vnd.google-apps.folder":
+                    folder_name = item.get("name")
+                    try:
+                        sub_resp = await client.get(f"{BUCKET_URL}/files?subfolder={folder_name}", headers=headers)
+                        if sub_resp.status_code == 200:
+                            sub_items = sub_resp.json()
+                            for sf in sub_items:
+                                sf["subfolder"] = folder_name
+                                sf["display_name"] = f"{folder_name}/{sf.get('name')}"
+                                all_files.append(sf)
+                    except Exception as se:
+                        logger.debug("Failed to list subfolder %s: %s", folder_name, se)
+            return all_files
     except Exception as e:
         logger.warning("Failed to fetch bucket files: %s", e)
         return []
+
+# ==============================================================================
+# Authentication Routes (Login & Logout)
+# ==============================================================================
+
+@app.get("/login", response_class=HTMLResponse)
+@app.get("/mcpd/login", response_class=HTMLResponse)
+async def login_page(request: Request, next: Optional[str] = Query(None)):
+    """Renders authentication page."""
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if verify_session_token(token):
+        return RedirectResponse(url=next or "/mcpd", status_code=status.HTTP_303_SEE_OTHER)
+
+    ip = security_limiter.get_client_ip(request)
+    is_locked, remaining = security_limiter.check_lockout(ip)
+    error_msg = None
+    if is_locked:
+        mins = remaining // 60
+        secs = remaining % 60
+        error_msg = f"SECURITY LOCKOUT: Too many failed login attempts from {ip}. Please retry in {mins}m {secs}s."
+
+    template = jinja_env.get_template("login.html")
+    content = template.render(
+        request=request,
+        error=error_msg,
+        next_url=next or "/mcpd",
+        action_url="/mcpd/login"
+    )
+    return HTMLResponse(content=content)
+
+@app.post("/login")
+@app.post("/mcpd/login")
+async def login_action(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next: Optional[str] = Form(None),
+):
+    """Processes login credentials with anti-bruteforce progressive delay and IP lockout."""
+    ip = security_limiter.get_client_ip(request)
+    is_locked, remaining = security_limiter.check_lockout(ip)
+    if is_locked:
+        mins = remaining // 60
+        secs = remaining % 60
+        template = jinja_env.get_template("login.html")
+        content = template.render(
+            request=request,
+            error=f"SECURITY LOCKOUT: IP {ip} temporarily locked. Retry in {mins}m {secs}s.",
+            next_url=next or "/mcpd",
+            action_url="/mcpd/login"
+        )
+        return HTMLResponse(content=content, status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    # Constant-time credential verification
+    user_ok = secrets.compare_digest(username.strip(), AUTH_USERNAME)
+    pass_ok = secrets.compare_digest(password.strip(), AUTH_PASSWORD)
+
+    if not (user_ok and pass_ok):
+        count, remaining_attempts, delay = await security_limiter.register_failure(ip)
+        if remaining_attempts <= 0:
+            error_msg = f"ACCESS DENIED: Maximum login attempts exceeded. IP {ip} locked for 15 minutes."
+            resp_code = status.HTTP_429_TOO_MANY_REQUESTS
+        else:
+            error_msg = f"ACCESS DENIED: Invalid identity or passkey. {remaining_attempts} attempt(s) remaining before IP lockout."
+            resp_code = status.HTTP_401_UNAUTHORIZED
+
+        template = jinja_env.get_template("login.html")
+        content = template.render(
+            request=request,
+            error=error_msg,
+            next_url=next or "/mcpd",
+            action_url="/mcpd/login"
+        )
+        return HTMLResponse(content=content, status_code=resp_code)
+
+    # Success: reset lockout counters
+    security_limiter.register_success(ip)
+    token = create_session_token(AUTH_USERNAME)
+
+    dest = next.strip() if next and next.strip().startswith("/") else "/mcpd"
+    response = RedirectResponse(url=dest, status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=SESSION_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+        secure=True,
+        path="/"
+    )
+    return response
+
+@app.get("/logout")
+@app.get("/mcpd/logout")
+async def logout_action():
+    """Clears authentication session."""
+    response = RedirectResponse(url="/mcpd/login", status_code=status.HTTP_303_SEE_OTHER)
+    response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
+    return response
 
 # ==============================================================================
 # HTML Pages: Dashboard & Bucket Manager (Dual Routing for / and /mcpd)
@@ -203,15 +467,16 @@ async def fetch_bucket_files() -> List[Dict[str, Any]]:
 @app.get("/", response_class=HTMLResponse)
 @app.get("/mcpd", response_class=HTMLResponse)
 @app.get("/mcpd/", response_class=HTMLResponse)
-async def dashboard_page(request: Request):
-    """Main AGYC Control Center dashboard."""
+async def dashboard_page(request: Request, user: str = Depends(require_auth)):
+    """Main AGYC Control Center dashboard (requires authentication)."""
     status_data = await fetch_agyc_status()
     bucket_data = await fetch_bucket_health()
     template = jinja_env.get_template("dashboard.html")
     html_content = template.render(
         status=status_data,
         bucket=bucket_data,
-        request=request
+        request=request,
+        user=user
     )
     return HTMLResponse(content=html_content)
 
@@ -219,15 +484,16 @@ async def dashboard_page(request: Request):
 @app.get("/bucket/", response_class=HTMLResponse)
 @app.get("/mcpd/bucket", response_class=HTMLResponse)
 @app.get("/mcpd/bucket/", response_class=HTMLResponse)
-async def bucket_manager_page(request: Request):
-    """Interactive Bucketloader File Manager page."""
+async def bucket_manager_page(request: Request, user: str = Depends(require_auth)):
+    """Interactive Bucketloader File Manager page (requires authentication)."""
     bucket_data = await fetch_bucket_health()
     files = await fetch_bucket_files()
     template = jinja_env.get_template("bucket.html")
     html_content = template.render(
         bucket=bucket_data,
         files=files,
-        request=request
+        request=request,
+        user=user
     )
     return HTMLResponse(content=html_content)
 
@@ -237,15 +503,10 @@ async def bucket_manager_page(request: Request):
 
 @app.get("/api/status")
 @app.get("/mcpd/api/status")
-async def api_status():
+async def api_status(user: str = Depends(require_auth)):
     """Live JSON status for AJAX polling."""
-    agyc = await fetch_agyc_status()
-    bucket = await fetch_bucket_health()
-    return {
-        "agyc": agyc,
-        "bucket": bucket,
-        "timestamp": time.time()
-    }
+    status_data = await fetch_agyc_status()
+    return status_data
 
 @app.post("/api/tasks/dispatch")
 @app.post("/mcpd/api/tasks/dispatch")
@@ -253,44 +514,41 @@ async def api_dispatch_task(
     project_name: str = Form(...),
     prompt: str = Form(...),
     model: Optional[str] = Form(None),
-    effort: Optional[str] = Form(None),
-    timeout: int = Form(600),
+    user: str = Depends(require_auth),
 ):
-    """Queues a new autonomous coding task in agyc-mcp."""
+    """Dispatches a new task into the background execution queue."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import queue_task
+    from src.server import dispatch_task
     try:
-        record = queue_task(
+        res = dispatch_task(
             project_name=project_name,
-            task=prompt,
-            model=model if model else None,
-            effort=effort if effort else None,
-            timeout=timeout
+            prompt=prompt,
+            model=model if model else None
         )
-        return {"success": True, "task": record}
+        return res
     except Exception as e:
-        logger.exception("Task dispatch error: %s", e)
+        logger.error("Task dispatch error: %s", e)
         return {"success": False, "error": str(e)}
 
 @app.post("/api/tasks/{task_id}/input")
 @app.post("/mcpd/api/tasks/{task_id}/input")
 async def api_send_task_input(
     task_id: str,
-    input_text: str = Form(...),
-    press_enter: bool = Form(True),
+    user_input: str = Form(...),
+    user: str = Depends(require_auth),
 ):
-    """Sends stdin input directly to a running task shell."""
+    """Sends interactive reply to a waiting subagent."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
-    from src.server import send_input_to_task
+    from src.server import send_task_input
     try:
-        res = send_input_to_task(task_id=task_id, input_text=input_text, press_enter=press_enter)
+        res = send_task_input(task_id=task_id, input_text=user_input)
         return res
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 @app.post("/api/tasks/{task_id}/cancel")
 @app.post("/mcpd/api/tasks/{task_id}/cancel")
-async def api_cancel_task(task_id: str):
+async def api_cancel_task(task_id: str, user: str = Depends(require_auth)):
     """Cancels a running or queued task."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
     from src.server import cancel_task
@@ -302,7 +560,7 @@ async def api_cancel_task(task_id: str):
 
 @app.get("/api/tasks/{task_id}")
 @app.get("/mcpd/api/tasks/{task_id}")
-async def api_get_task_details(task_id: str):
+async def api_get_task_details(task_id: str, user: str = Depends(require_auth)):
     """Retrieves detailed logs and state for a specific task."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
     from src.server import get_task_status
@@ -316,6 +574,7 @@ async def api_get_task_details(task_id: str):
 async def api_project_commit(
     project_name: str = Form(...),
     message: Optional[str] = Form(None),
+    user: str = Depends(require_auth),
 ):
     """Manually triggers git commit and push for a project."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
@@ -331,6 +590,7 @@ async def api_project_commit(
 async def api_run_command(
     command: str = Form(...),
     timeout: int = Form(30),
+    user: str = Depends(require_auth),
 ):
     """Executes an agyc slash command (e.g. /usage, /models)."""
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
@@ -342,23 +602,156 @@ async def api_run_command(
         return {"success": False, "error": str(e)}
 
 # ==============================================================================
-# Bucketloader Management APIs
+# Bucketloader Management & Authenticated Download APIs
 # ==============================================================================
 
 @app.get("/api/bucket/files")
 @app.get("/mcpd/api/bucket/files")
-async def api_bucket_files():
-    """Lists files in the Google Drive bucket."""
+async def api_bucket_files(user: str = Depends(require_auth)):
+    """Lists files in the Google Drive bucket (requires authentication)."""
     files = await fetch_bucket_files()
     return files
+
+@app.get("/api/bucket/files/{file_id}/download")
+@app.get("/mcpd/api/bucket/files/{file_id}/download")
+@app.get("/bucket/download/{file_id}")
+@app.get("/mcpd/bucket/download/{file_id}")
+async def api_bucket_file_download(
+    file_id: str,
+    request: Request,
+    filename: Optional[str] = Query(None),
+    user: str = Depends(require_auth),
+):
+    """
+    Secure authenticated file download endpoint.
+    Streams binary/text file directly with Content-Disposition: attachment header.
+    """
+    api_key = get_bucket_api_key()
+    url = f"{BUCKET_URL}/files/{file_id}?download=1"
+
+    req_headers = {}
+    if api_key:
+        req_headers["X-API-Key"] = api_key
+    range_header = request.headers.get("range")
+    if range_header:
+        req_headers["Range"] = range_header
+
+    client = httpx.AsyncClient(timeout=180.0)
+    try:
+        req = client.build_request("GET", url, headers=req_headers)
+        resp = await client.send(req, stream=True)
+
+        if resp.status_code not in (200, 206):
+            body = await resp.aread()
+            await resp.aclose()
+            await client.aclose()
+            return JSONResponse({"error": "Failed to stream file from bucket", "status_code": resp.status_code, "detail": body.decode("utf-8", errors="ignore")}, status_code=resp.status_code)
+
+        async def stream_generator():
+            try:
+                async for chunk in resp.aiter_bytes(chunk_size=65536):
+                    yield chunk
+            finally:
+                await resp.aclose()
+                await client.aclose()
+
+        response_headers = {}
+        for h in ("content-type", "content-length", "accept-ranges", "content-range"):
+            val = resp.headers.get(h)
+            if val:
+                response_headers[h] = val
+
+        disposition = resp.headers.get("content-disposition")
+        if disposition and "attachment" in disposition.lower():
+            response_headers["content-disposition"] = disposition
+        elif filename:
+            clean_name = os.path.basename(filename).replace('"', '\\"')
+            response_headers["content-disposition"] = f'attachment; filename="{clean_name}"'
+        else:
+            response_headers["content-disposition"] = f'attachment; filename="bucket_file_{file_id}"'
+
+        return StreamingResponse(
+            stream_generator(),
+            status_code=resp.status_code,
+            media_type=resp.headers.get("content-type", "application/octet-stream"),
+            headers=response_headers,
+        )
+    except Exception as e:
+        await client.aclose()
+        logger.error("Download streaming error for file %s: %s", file_id, e)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/bucket/raw/{filepath:path}/download")
+@app.get("/mcpd/api/bucket/raw/{filepath:path}/download")
+@app.get("/bucket/raw/{filepath:path}/download")
+@app.get("/mcpd/bucket/raw/{filepath:path}/download")
+async def api_bucket_raw_file_download(
+    filepath: str,
+    request: Request,
+    user: str = Depends(require_auth),
+):
+    """
+    Secure authenticated file download endpoint by relative filepath.
+    Streams file directly with Content-Disposition: attachment header.
+    """
+    api_key = get_bucket_api_key()
+    clean_path = filepath.strip("/")
+    url = f"{BUCKET_URL}/raw/{clean_path}?download=1"
+
+    req_headers = {}
+    if api_key:
+        req_headers["X-API-Key"] = api_key
+    range_header = request.headers.get("range")
+    if range_header:
+        req_headers["Range"] = range_header
+
+    client = httpx.AsyncClient(timeout=180.0)
+    try:
+        req = client.build_request("GET", url, headers=req_headers)
+        resp = await client.send(req, stream=True)
+
+        if resp.status_code not in (200, 206):
+            body = await resp.aread()
+            await resp.aclose()
+            await client.aclose()
+            return JSONResponse({"error": f"Failed to retrieve file '{clean_path}'", "status_code": resp.status_code, "detail": body.decode("utf-8", errors="ignore")}, status_code=resp.status_code)
+
+        async def stream_generator():
+            try:
+                async for chunk in resp.aiter_bytes(chunk_size=65536):
+                    yield chunk
+            finally:
+                await resp.aclose()
+                await client.aclose()
+
+        response_headers = {}
+        for h in ("content-type", "content-length", "accept-ranges", "content-range"):
+            val = resp.headers.get(h)
+            if val:
+                response_headers[h] = val
+
+        base_name = os.path.basename(clean_path).replace('"', '\\"')
+        response_headers["content-disposition"] = f'attachment; filename="{base_name}"'
+
+        return StreamingResponse(
+            stream_generator(),
+            status_code=resp.status_code,
+            media_type=resp.headers.get("content-type", "application/octet-stream"),
+            headers=response_headers,
+        )
+    except Exception as e:
+        await client.aclose()
+        logger.error("Raw download streaming error for %s: %s", filepath, e)
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post("/api/bucket/upload")
 @app.post("/mcpd/api/bucket/upload")
 async def api_bucket_upload(
     file: UploadFile = File(...),
     overwrite: bool = Form(False),
+    user: str = Depends(require_auth),
 ):
-    """Uploads a file directly into the Google Drive bucket."""
+    """Uploads a file directly into the Google Drive bucket (requires authentication)."""
     api_key = get_bucket_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
     url = f"{BUCKET_URL}/upload"
@@ -382,8 +775,9 @@ async def api_bucket_save_text(
     filename: str = Form(...),
     content: str = Form(...),
     overwrite: bool = Form(True),
+    user: str = Depends(require_auth),
 ):
-    """Creates or overwrites a text/markdown/code file in the Google Drive bucket."""
+    """Creates or overwrites a text/markdown/code file in the Google Drive bucket (requires authentication)."""
     api_key = get_bucket_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
     url = f"{BUCKET_URL}/upload"
@@ -403,8 +797,8 @@ async def api_bucket_save_text(
 
 @app.get("/api/bucket/files/{file_id}/content")
 @app.get("/mcpd/api/bucket/files/{file_id}/content")
-async def api_bucket_file_content(file_id: str):
-    """Retrieves file content for preview or text editor."""
+async def api_bucket_file_content(file_id: str, user: str = Depends(require_auth)):
+    """Retrieves file content for preview or text editor (requires authentication)."""
     api_key = get_bucket_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
     url = f"{BUCKET_URL}/files/{file_id}"
@@ -429,8 +823,8 @@ async def api_bucket_file_content(file_id: str):
 
 @app.delete("/api/bucket/files/{file_id}")
 @app.delete("/mcpd/api/bucket/files/{file_id}")
-async def api_bucket_delete_file(file_id: str):
-    """Deletes/trashes a file from the Google Drive bucket."""
+async def api_bucket_delete_file(file_id: str, user: str = Depends(require_auth)):
+    """Deletes/trashes a file from the Google Drive bucket (requires authentication)."""
     api_key = get_bucket_api_key()
     headers = {"X-API-Key": api_key} if api_key else {}
     url = f"{BUCKET_URL}/files/{file_id}"
