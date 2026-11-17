@@ -115,71 +115,89 @@ To prevent high data transfer and protect Google Drive API quotas:
 ## 5. Autonomous 4-Hour Completion Loop (`complete`)
 
 ### Autonomous Continuous Engineering Architecture
-The `complete` command implements a self-healing, long-running (4-hour) continuous development cycle that drives projects from inception or partial progress to a 100% complete application with zero runtime errors, automated test coverage, and GitHub Actions CI.
+The `complete` command implements a self-healing, long-running (4-hour) continuous development cycle that drives projects from inception or partial progress to a 100% complete application with zero runtime errors, comprehensive test coverage (including mandatory real UI automation), and GitHub Actions CI.
+
+Rather than running a single sequential agent turn, the engine provisions and coordinates **three simultaneous `agyc` instances** operating concurrently within the target project workspace:
 
 ```
-                  [ complete / complete_project ]
-                                │
-                                ▼
-         ┌──────────────────────────────────────────────┐
-         │ 4-Hour Autonomous Completion Session (14400s) │
-         └──────────────────────┬───────────────────────┘
-                                │
-            ┌───────────────────┴───────────────────┐
-            │ Every 5 Minutes: Cron Inspection Loop │
-            └───────────────────┬───────────────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        ▼                       ▼                       ▼
-  [ Automated Tests ]       [ CI Workflow ]         [ TODO.md ]
-  Python: pytest            .github/workflows/      Structured roadmap
-  Node: npm test            ci.yml verification     Completed vs Pending
-  Rust: cargo test          Multi-step runners      Progress percentage
-  Go: go test               Coverage reporting
-        │                       │                       │
-        └───────────────────────┼───────────────────────┘
-                                │
-            ┌───────────────────┴───────────────────┐
-            │ Formulate Targeted Sub-Turn Directives│
-            │ Phase 1: Bug Fixing & Test Resolution │
-            │ Phase 2: GitHub Actions CI Setup      │
-            │ Phase 3: Automated Test Creation      │
-            │ Phase 4: Feature Implementation       │
-            │ Phase 5: Zero-Error Hardening         │
-            └───────────────────┬───────────────────┘
-                                │
-                                ▼
-            [ Agent Self-Commit via Prompt Directives ]
-            git add . && git commit -m "..." && git push
+                      [ complete / complete_project ]
+                                     │
+                                     ▼
+             ┌──────────────────────────────────────────────┐
+             │ 4-Hour Autonomous Completion Session (14400s) │
+             └──────────────────────┬───────────────────────┘
+                                    │
+                ┌───────────────────┴───────────────────┐
+                │ Every 5 Minutes: Cron Inspection Loop │
+                │ (Runs Tests, Checks CI & TODO.md)     │
+                └───────────────────┬───────────────────┘
+                                    │
+         ┌──────────────────────────┼──────────────────────────┐
+         ▼                          ▼                          ▼
+  [ WORKER 1: Hunter ]      [ WORKER 2: QA ]          [ WORKER 3: Builder ]
+  Role: error_hunter        Role: test_engineer       Role: feature_builder
+  - Static Code Audits      - Comprehensive Tests     - Feature Implementations
+  - Concurrency & Deadlocks - Mandatory UI Automation - TODO.md Milestones
+  - Runtime Error Healing   - 100% Pass Rate Target   - GitHub Actions CI (.yml)
+         │                          │                          │
+         └──────────────────────────┼──────────────────────────┘
+                                    │
+                                    ▼
+                 [ Thread-Safe Git Lock Synchronization ]
+                 Reentrant locking prevents workspace conflicts
+                                    │
+                                    ▼
+                [ Autonomous Agent Self-Commit Directives ]
+                git add . && git commit -m "..." && git push
 ```
 
-### Key Engineering Features
-1. **5-Minute Health & Status Loop**:
-   - Runs a background thread monitoring `agyc` execution. If a subtask finishes, crashes, or pauses, the engine inspects repository state immediately and dispatches the next turn.
-2. **Dynamic `TODO.md` Roadmap Generation**:
-   - If `TODO.md` is absent, the engine scans the workspace, analyzes existing code and the user's primary goal, and creates a comprehensive milestone roadmap.
-   - Automatically tracks pending (`- [ ]`) versus completed (`- [x]`) items and computes progress percentages.
-3. **Multi-Language Automated Test Suites**:
-   - Native auto-detection and execution for:
-     - Python: `pytest` / `python -m unittest`
-     - Node.js: `npm test`
-     - Rust: `cargo test`
-     - Go: `go test ./...`
-   - Test failures and stack traces are captured and injected directly into the next turn's prompt for automated self-healing.
-4. **GitHub Actions CI Workflow Generation**:
-   - Verifies presence of `.github/workflows/ci.yml`. If missing, schedules a high-priority subtask instructing the agent to author a production-grade CI pipeline.
-5. **Milestone Self-Commitments**:
-   - The agent stages and commits its own work after completing each milestone (`git add . && git commit -m "..." && git push`). No blind host auto-commit timer is run.
-6. **4-Hour Autonomous Lifespan**:
-   - The loop maintains execution for up to 4.0 hours (14,400 seconds) or until all milestones are resolved and tests pass with 0 errors.
+### Simultaneous Multi-Instance Roles
+
+1. **Worker 1: Error & Bug Hunter (`error_hunter`)**:
+   - **Mandate**: Scan codebases for latent runtime crashes, syntax flaws, type errors, deadlocks, and race conditions.
+   - Inspects existing log files and crash traces to eliminate recurring errors.
+   - Refactors problematic functions without mutating core feature specs.
+
+2. **Worker 2: Lead Test Automation Engineer (`test_engineer`)**:
+   - **Mandate**: Design, author, and execute thorough unit, integration, and **actual UI tests**.
+   - **Mandatory Real UI Automation**:
+     - **Web Projects**: Integrates headless browser automation via **Playwright** (`playwright.config.*` / `npx playwright test`) or **Cypress** (`cypress.config.*`). Tests must automate the real DOM, verify button clicks, validate route transitions, assert data loading, and assert **zero browser console errors** (`page.on('console', msg => ...)`).
+     - **CLI / Terminal Tools**: Integrates interactive PTY terminal emulation using `pexpect` or `ptyprocess` (e.g. `tests/test_ui.py`, `tests/test_interactive*.py`). Validates ANSI screen buffers, user input prompts, escape codes, keyboard navigation, and exit codes.
+   - **Target**: Zero test failures (100% pass rate). Any test failure triggers automatic diagnostic extraction and remediation prompts.
+
+3. **Worker 3: Feature & Roadmap Implementer (`feature_builder`)**:
+   - **Mandate**: Implement outstanding features and deliverables outlined in `TODO.md`.
+   - Provisions and validates `.github/workflows/ci.yml` with multi-step build, lint, and test jobs.
+   - Converts pending checkboxes (`- [ ]`) into completed items (`- [x]`) upon verified implementation.
+
+### Concurrency & Thread-Safe Workspace Synchronization
+- **Concurrent Task Manager (`task_runner.py`)**:
+  - Upgraded to support multiple simultaneous active tasks per workspace (`allow_concurrent=True, max_concurrent=4`).
+  - Active task IDs are tracked concurrently (`active_project_tasks[project] = [id1, id2, id3]`).
+- **Reentrant Git Locking (`_get_git_lock`)**:
+  - A thread-safe project-level reentrant lock ensures simultaneous workers do not collide when writing git index locks or staging commits.
+- **Autonomous Agent Self-Commits**:
+  - All workers are instructed via prompt directives to stage and commit their own verified milestone progress (`git add . && git commit -m "..." && git push`). No blind host auto-commit timer is run.
+
+### Dynamic Health & Telemetry Loop
+1. **5-Minute Status & Verification Cron**:
+   - Runs a non-blocking background thread that verifies task liveness every 5 minutes.
+   - Detects worker completion or failures, auto-runs unit/UI tests, calculates `TODO.md` completion percentages, and re-dispatches worker instances.
+2. **Real-Time UI Test Detection & Telemetry**:
+   - `_run_ui_tests()` auto-detects browser and terminal test runners and reports live telemetry:
+     - `ui_tests_detected`: Boolean flag indicating detected UI test suites.
+     - `ui_tests_passing`: Boolean status verifying all UI tests pass cleanly.
+     - `ui_tests_runner`: Discovered test runner command (e.g. `playwright`, `cypress`, `pytest-ui`).
+3. **4-Hour Autonomous Lifespan**:
+   - Sessions run autonomously for up to 4.0 hours (14,400 seconds) or terminate early once 100% of `TODO.md` milestones are complete and all tests pass with 0 errors.
 
 ### MCP Tools & REST API Endpoints
 | MCP Tool | HTTP Endpoint | Description |
 | :--- | :--- | :--- |
-| `complete` | `POST /mcpd/api/complete` | Launches a 4-hour autonomous completion loop |
+| `complete` | `POST /mcpd/api/complete` | Launches a 4-hour multi-instance autonomous completion loop |
 | `complete_project` | `POST /mcpd/api/complete` | Alias for `complete` |
-| `get_completion_status` | `GET /mcpd/api/complete/{id}` | Real-time status, countdown, TODO %, and test output |
-| `cancel_completion` | `POST /mcpd/api/complete/{id}/cancel` | Gracefully cancels an active completion session |
+| `get_completion_status` | `GET /mcpd/api/complete/{id}` | Real-time status, worker pills, countdown, TODO %, and UI test output |
+| `cancel_completion` | `POST /mcpd/api/complete/{id}/cancel` | Gracefully cancels an active completion session and stops all workers |
 | `list_completions` | `GET /mcpd/api/complete` | Lists active and past completion sessions |
 
 ---

@@ -1475,9 +1475,20 @@
 
                 let testBadge = '<span class="ks-badge ks-badge-neutral" style="font-size: 0.6875rem;">Tests: Pending</span>';
                 if (s.tests_passing === true) {
-                    testBadge = '<span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ Tests: 100% Passing</span>';
+                    testBadge = '<span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ Unit/Integration: 100% Passing</span>';
                 } else if (s.tests_passing === false) {
                     testBadge = '<span class="ks-badge ks-badge-danger" style="font-size: 0.6875rem;">✖ Tests: Failing (Self-Healing)</span>';
+                }
+
+                let uiBadge = '';
+                if (s.ui_tests_detected) {
+                    if (s.ui_tests_passing === true) {
+                        uiBadge = `<span class="ks-badge ks-badge-patina" style="font-size: 0.6875rem;">✔ Actual UI Tests (${escapeHtml(s.ui_tests_runner || 'Active')}): Passing</span>`;
+                    } else if (s.ui_tests_passing === false) {
+                        uiBadge = `<span class="ks-badge ks-badge-danger" style="font-size: 0.6875rem;">✖ UI Tests: Failing (Self-Healing)</span>`;
+                    } else {
+                        uiBadge = `<span class="ks-badge ks-badge-neutral" style="font-size: 0.6875rem;">UI Tests: Running</span>`;
+                    }
                 }
 
                 const ciBadge = s.ci_workflow_present 
@@ -1486,6 +1497,18 @@
 
                 const timeRem = isRunning ? (s.time_remaining_formatted || 'In progress') : 'Expired / Finished';
                 const elapsed = s.elapsed_formatted || '';
+
+                const workers = s.workers || {};
+                const workerPills = Object.keys(workers).map(roleKey => {
+                    const w = workers[roleKey];
+                    const label = roleKey === 'error_hunter' ? '🐞 Bug Hunter' : (roleKey === 'test_engineer' ? '🧪 Test & UI Eng' : '⚡ Feature Builder');
+                    const isWRunning = w.status === 'working' || w.status === 'running';
+                    const badgeClass = isWRunning ? 'ks-badge-patina' : (w.status === 'completed' ? 'ks-badge-gold' : 'ks-badge-neutral');
+                    return `<span class="ks-badge ${badgeClass}" style="font-size: 0.6875rem;" title="${escapeHtml(w.role || roleKey)}: ${escapeHtml(w.status || 'idle')}">
+                        ${isWRunning ? '<span class="ks-pulse" style="margin-right: 4px;"></span>' : ''}${label}: ${escapeHtml(w.status || 'idle')}
+                        ${w.task_id ? `<a href="javascript:void(0)" onclick="viewTaskLogs('${escapeHtml(w.task_id)}')" style="color: inherit; text-decoration: underline; margin-left: 4px;">#${escapeHtml(w.task_id.slice(-6))}</a>` : ''}
+                    </span>`;
+                }).join(' ');
 
                 return `
                 <div class="ks-comp-item ${escapeHtml(s.status)}">
@@ -1506,22 +1529,27 @@
                     </div>
 
                     <div style="display: flex; align-items: center; justify-content: space-between; font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-muted); margin-bottom: 4px;">
-                        <span><strong>Phase:</strong> ${escapeHtml(s.last_phase || 'Initializing...')} (Iteration #${s.iteration || 1})</span>
+                        <span><strong>Iter #${s.iteration || 1}:</strong> ${escapeHtml(s.last_phase || 'Active')}</span>
                         <span>TODO: ${todo.completed}/${todo.total} items (${pct}%)</span>
                     </div>
 
-                    <div class="ks-comp-progress-bg">
+                    <div class="ks-comp-progress-bg" style="margin-bottom: 10px;">
                         <div class="ks-comp-progress-bar" style="width: ${pct}%;"></div>
+                    </div>
+
+                    <!-- Simultaneous Workers Row -->
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+                        <span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint);">Simultaneous Instances:</span>
+                        ${workerPills || '<span class="ks-badge ks-badge-neutral" style="font-size: 0.6875rem;">Spawning...</span>'}
                     </div>
 
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 6px;">
                         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
                             ${testBadge}
+                            ${uiBadge}
                             ${ciBadge}
-                            ${s.current_task_id ? `<span style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint);">Subtask: <a href="javascript:void(0)" onclick="viewTaskLogs('${escapeHtml(s.current_task_id)}')" style="color: var(--ks-kinpaku);">${escapeHtml(s.current_task_id)}</a></span>` : ''}
                         </div>
                         <div style="display: flex; gap: 8px;">
-                            ${s.current_task_id ? `<button onclick="viewTaskLogs('${escapeHtml(s.current_task_id)}')" class="ks-btn ks-btn-secondary" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Inspect Subtask</button>` : ''}
                             ${isRunning ? `<button onclick="cancelCompletion('${escapeHtml(s.session_id)}')" class="ks-btn ks-btn-danger" style="font-size: 0.72rem; padding: 0 10px; height: 28px;">Cancel Loop</button>` : ''}
                         </div>
                     </div>
