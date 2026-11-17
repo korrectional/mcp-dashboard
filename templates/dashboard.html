@@ -1,672 +1,1096 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP Mission Control - kanevskyy.dev</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: { 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
-                        surface: '#0f172a',
-                        card: '#1e293b',
-                        cardborder: '#334155'
-                    }
-                }
-            }
-        }
-    </script>
+    <title>AGYC // Mission Control</title>
+    <!-- Google Fonts: Alumni Sans (Display/Wordmark), Albert Sans (Body/UI), JetBrains Mono (Telemetry/Code) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@300;400;500;600&family=Alumni+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #0f172a; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        .pulse-subtle { animation: pulse 2.5s infinite; }
+        :root {
+            /* Impeccable Neo Kinpaku Tokens */
+            --ks-lacquer-black: oklch(7% 0.006 95);     /* #0d0c0b - page ground */
+            --ks-lacquer-deep: oklch(4% 0.004 95);      /* #070606 - deepest inset well */
+            --ks-raised-lacquer: oklch(11% 0.006 95);   /* #161514 - panels, cards */
+            --ks-graphite: oklch(15% 0.008 95);         /* #211f1e - input/chip ground */
+            --ks-graphite-2: oklch(19% 0.008 95);       /* #2b2826 - elevated chips */
+            
+            --ks-kinpaku: oklch(84% 0.19 80.46);        /* #f5c542 - brand gold anchor */
+            --ks-kinpaku-vivid: oklch(87% 0.20 85);     /* #ffd645 - hover gold */
+            --ks-kinpaku-pale: oklch(86% 0.07 84);      /* pale gold fills */
+            --ks-kinpaku-rich: oklch(77% 0.13 82);      /* active border / CTA */
+            --ks-kinpaku-deep: oklch(61% 0.085 78);     /* subtle structural gold */
+            --ks-on-gold: oklch(14% 0.018 95);          /* #181613 - dark ink on gold */
+
+            --ks-patina: oklch(70% 0.12 188);           /* #45b5a5 - verdigris state anchor */
+            --ks-patina-pale: oklch(82% 0.07 188);      /* soft patina wash */
+            --ks-patina-deep: oklch(49% 0.08 188);      /* text-safe patina */
+
+            --ks-champagne: oklch(91% 0 0);             /* #e8e8e8 - headlines, titles */
+            --ks-text-warm: oklch(88% 0 0);             /* #dedede - body text */
+            --ks-text-muted: oklch(72% 0 0);            /* #b3b3b3 - captions, meta */
+            --ks-text-faint: oklch(62% 0 0);            /* #999999 - subdued indicators */
+            --ks-text-disabled: oklch(45% 0 0);
+
+            --ks-rule: oklch(78% 0 0 / 0.14);           /* subtle divider */
+            --ks-rule-gold: oklch(74% 0.09 82 / 0.5);   /* brand gold hairline */
+            --ks-vermilion: oklch(58% 0.15 35);         /* error/warning */
+
+            --ks-font: "Albert Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --ks-font-display: "Alumni Sans", "Albert Sans", sans-serif;
+            --ks-font-mono: "JetBrains Mono", SFMono-Regular, Consolas, monospace;
+
+            --ks-radius-xs: 2px;
+            --ks-radius-sm: 4px;
+            --ks-radius-md: 6px;
+            --ks-radius-lg: 8px;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--ks-lacquer-black);
+            color: var(--ks-text-warm);
+            font-family: var(--ks-font);
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        /* Calibration Grid Line Header */
+        .ks-nav {
+            border-bottom: 1px solid var(--ks-rule);
+            background: var(--ks-lacquer-deep);
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .ks-nav-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ks-brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            text-decoration: none;
+            color: var(--ks-champagne);
+        }
+
+        /* Impeccable Carved Tile Mark */
+        .ks-mark {
+            width: 32px;
+            height: 32px;
+            background: var(--ks-kinpaku);
+            position: relative;
+            clip-path: polygon(0 0, 100% 0, 100% 75%, 75% 100%, 0 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .ks-mark::after {
+            content: "";
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--ks-lacquer-deep);
+            top: 4px;
+            right: 4px;
+        }
+
+        .ks-wordmark {
+            font-family: var(--ks-font-display);
+            font-size: 1.5rem;
+            font-weight: 500;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--ks-champagne);
+            line-height: 1;
+        }
+
+        .ks-wordmark span {
+            color: var(--ks-kinpaku);
+        }
+
+        .ks-nav-links {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .ks-nav-link {
+            font-family: var(--ks-font-mono);
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            text-decoration: none;
+            color: var(--ks-text-muted);
+            padding: 8px 14px;
+            border-radius: var(--ks-radius-xs);
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+        }
+
+        .ks-nav-link:hover {
+            color: var(--ks-champagne);
+            border-color: var(--ks-rule);
+            background: var(--ks-graphite);
+        }
+
+        .ks-nav-link.active {
+            color: var(--ks-kinpaku);
+            border-color: var(--ks-rule-gold);
+            background: rgba(245, 197, 66, 0.08);
+        }
+
+        .ks-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px 24px 64px 24px;
+        }
+
+        /* Hero / Metric Bar */
+        .ks-hero {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .ks-tile {
+            background: var(--ks-raised-lacquer);
+            border: 1px solid var(--ks-rule);
+            border-radius: var(--ks-radius-sm);
+            padding: 20px;
+            position: relative;
+            transition: border-color 0.2s ease;
+        }
+
+        .ks-tile:hover {
+            border-color: var(--ks-rule-gold);
+        }
+
+        .ks-tile-eyebrow {
+            font-family: var(--ks-font-mono);
+            font-size: 0.6875rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--ks-text-faint);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ks-tile-value {
+            font-family: var(--ks-font-display);
+            font-size: 2.2rem;
+            font-weight: 400;
+            line-height: 1.1;
+            color: var(--ks-champagne);
+        }
+
+        .ks-tile-sub {
+            font-size: 0.8125rem;
+            color: var(--ks-text-muted);
+            margin-top: 4px;
+        }
+
+        /* Buttons */
+        .ks-btn {
+            font-family: var(--ks-font);
+            font-size: 0.8125rem;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: var(--ks-radius-xs);
+            cursor: pointer;
+            border: 1px solid transparent;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s ease;
+        }
+
+        .ks-btn-primary {
+            background: var(--ks-kinpaku);
+            color: var(--ks-on-gold);
+            border-color: var(--ks-kinpaku);
+            font-weight: 600;
+        }
+
+        .ks-btn-primary:hover {
+            background: var(--ks-kinpaku-vivid);
+            border-color: var(--ks-kinpaku-vivid);
+        }
+
+        .ks-btn-secondary {
+            background: var(--ks-graphite);
+            color: var(--ks-champagne);
+            border-color: var(--ks-rule);
+        }
+
+        .ks-btn-secondary:hover {
+            border-color: var(--ks-rule-gold);
+            background: var(--ks-graphite-2);
+            color: var(--ks-kinpaku);
+        }
+
+        .ks-btn-patina {
+            background: rgba(69, 181, 165, 0.12);
+            color: var(--ks-patina);
+            border-color: rgba(69, 181, 165, 0.35);
+        }
+
+        .ks-btn-patina:hover {
+            background: rgba(69, 181, 165, 0.22);
+            border-color: var(--ks-patina);
+        }
+
+        .ks-btn-danger {
+            background: rgba(217, 78, 52, 0.12);
+            color: var(--ks-vermilion);
+            border-color: rgba(217, 78, 52, 0.35);
+        }
+
+        .ks-btn-danger:hover {
+            background: rgba(217, 78, 52, 0.22);
+            border-color: var(--ks-vermilion);
+        }
+
+        /* Section Headings */
+        .ks-section-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--ks-rule);
+        }
+
+        .ks-section-title {
+            font-family: var(--ks-font-display);
+            font-size: 1.5rem;
+            font-weight: 400;
+            letter-spacing: 0.04em;
+            color: var(--ks-champagne);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .ks-badge {
+            font-family: var(--ks-font-mono);
+            font-size: 0.6875rem;
+            padding: 2px 8px;
+            border-radius: var(--ks-radius-xs);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .ks-badge-gold {
+            background: rgba(245, 197, 66, 0.15);
+            color: var(--ks-kinpaku);
+            border: 1px solid rgba(245, 197, 66, 0.35);
+        }
+
+        .ks-badge-patina {
+            background: rgba(69, 181, 165, 0.15);
+            color: var(--ks-patina);
+            border: 1px solid rgba(69, 181, 165, 0.35);
+        }
+
+        .ks-badge-neutral {
+            background: var(--ks-graphite);
+            color: var(--ks-text-muted);
+            border: 1px solid var(--ks-rule);
+        }
+
+        .ks-badge-danger {
+            background: rgba(217, 78, 52, 0.15);
+            color: var(--ks-vermilion);
+            border: 1px solid rgba(217, 78, 52, 0.35);
+        }
+
+        /* Project Tabs */
+        .ks-tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--ks-lacquer-deep);
+            padding: 4px;
+            border-radius: var(--ks-radius-xs);
+            border: 1px solid var(--ks-rule);
+        }
+
+        .ks-tab {
+            font-family: var(--ks-font-mono);
+            font-size: 0.75rem;
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: var(--ks-radius-xs);
+            color: var(--ks-text-muted);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .ks-tab.active {
+            background: var(--ks-raised-lacquer);
+            color: var(--ks-kinpaku);
+            border-color: var(--ks-rule-gold);
+        }
+
+        /* Projects Grid */
+        .ks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            margin-bottom: 36px;
+        }
+
+        .ks-card {
+            background: var(--ks-raised-lacquer);
+            border: 1px solid var(--ks-rule);
+            border-radius: var(--ks-radius-sm);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: border-color 0.2s ease;
+        }
+
+        .ks-card:hover {
+            border-color: var(--ks-rule-gold);
+        }
+
+        .ks-card-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .ks-card-title {
+            font-family: var(--ks-font);
+            font-size: 1.0625rem;
+            font-weight: 600;
+            color: var(--ks-champagne);
+            word-break: break-all;
+        }
+
+        .ks-card-desc {
+            font-size: 0.8125rem;
+            color: var(--ks-text-muted);
+            margin-bottom: 16px;
+            line-height: 1.5;
+            min-height: 38px;
+        }
+
+        .ks-card-meta {
+            font-family: var(--ks-font-mono);
+            font-size: 0.75rem;
+            color: var(--ks-text-faint);
+            background: var(--ks-lacquer-deep);
+            padding: 10px 12px;
+            border-radius: var(--ks-radius-xs);
+            border: 1px solid var(--ks-rule);
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .ks-card-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .ks-card-meta-label {
+            color: var(--ks-text-faint);
+            text-transform: uppercase;
+            font-size: 0.625rem;
+            letter-spacing: 0.1em;
+        }
+
+        .ks-card-meta-val {
+            color: var(--ks-champagne);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 180px;
+        }
+
+        .ks-card-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Active Tasks Section */
+        .ks-task-item {
+            background: var(--ks-raised-lacquer);
+            border: 1px solid var(--ks-rule);
+            border-left: 3px solid var(--ks-patina);
+            border-radius: var(--ks-radius-sm);
+            padding: 18px 20px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .ks-task-info {
+            flex: 1;
+        }
+
+        .ks-task-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+
+        .ks-task-id {
+            font-family: var(--ks-font-mono);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--ks-champagne);
+        }
+
+        .ks-task-prompt {
+            font-size: 0.875rem;
+            color: var(--ks-text-warm);
+            margin-bottom: 6px;
+        }
+
+        .ks-task-meta {
+            font-family: var(--ks-font-mono);
+            font-size: 0.75rem;
+            color: var(--ks-text-muted);
+            display: flex;
+            gap: 16px;
+        }
+
+        /* Terminal Window */
+        .ks-terminal {
+            background: var(--ks-lacquer-deep);
+            border: 1px solid var(--ks-rule);
+            border-radius: var(--ks-radius-sm);
+            overflow: hidden;
+            margin-bottom: 36px;
+        }
+
+        .ks-terminal-head {
+            background: var(--ks-raised-lacquer);
+            border-bottom: 1px solid var(--ks-rule);
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .ks-terminal-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .ks-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .ks-dot-red { background: #ff5f56; }
+        .ks-dot-yellow { background: #ffbd2e; }
+        .ks-dot-green { background: #27c93f; }
+
+        .ks-terminal-body {
+            padding: 16px;
+            font-family: var(--ks-font-mono);
+            font-size: 0.8125rem;
+            line-height: 1.6;
+            color: var(--ks-champagne);
+            min-height: 120px;
+            max-height: 280px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .ks-terminal-input-bar {
+            display: flex;
+            gap: 10px;
+            padding: 12px 16px;
+            background: var(--ks-raised-lacquer);
+            border-top: 1px solid var(--ks-rule);
+        }
+
+        .ks-input {
+            flex: 1;
+            background: var(--ks-lacquer-deep);
+            border: 1px solid var(--ks-rule);
+            border-radius: var(--ks-radius-xs);
+            color: var(--ks-champagne);
+            font-family: var(--ks-font-mono);
+            font-size: 0.8125rem;
+            padding: 8px 12px;
+            outline: none;
+            transition: border-color 0.15s ease;
+        }
+
+        .ks-input:focus {
+            border-color: var(--ks-rule-gold);
+        }
+
+        /* Modal Overlay */
+        .ks-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(7, 6, 6, 0.85);
+            backdrop-filter: blur(2px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .ks-modal {
+            background: var(--ks-raised-lacquer);
+            border: 1px solid var(--ks-rule-gold);
+            border-radius: var(--ks-radius-sm);
+            width: 100%;
+            max-width: 620px;
+            padding: 24px;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.7);
+        }
+
+        .ks-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--ks-rule);
+        }
+
+        .ks-pulse {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--ks-patina);
+            box-shadow: 0 0 8px var(--ks-patina);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+        }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+<body>
 
-    <!-- Top Navigation Bar -->
-    <header class="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <a href="/mcpd" class="flex items-center space-x-3 text-white hover:opacity-90 transition">
-                    <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/30">
-                        <i class="fa-solid fa-terminal text-lg"></i>
-                    </div>
-                    <div>
-                        <span class="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">MCP Control Center</span>
-                        <span class="text-xs text-slate-400 block -mt-1 font-mono">kanevskyy.dev/mcpd</span>
-                    </div>
-                </a>
-            </div>
-
-            <!-- Header Links & Badges -->
-            <div class="flex items-center space-x-4">
-                <a href="/mcpd/bucket" class="px-3.5 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-300 text-sm font-medium flex items-center space-x-2 transition shadow-sm">
-                    <i class="fa-brands fa-google-drive text-blue-400"></i>
-                    <span>Bucket Files</span>
-                    <span class="text-xs bg-blue-500/30 px-1.5 py-0.5 rounded text-blue-200">/mcpd/bucket</span>
-                </a>
-
-                <div class="flex items-center space-x-2 bg-slate-800/80 border border-slate-700 px-3 py-1.5 rounded-lg text-xs">
-                    <span id="live-indicator" class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span id="live-status-text" class="text-slate-300 font-medium">Live Synced</span>
-                    <button id="toggle-refresh" onclick="toggleAutoRefresh()" class="text-slate-400 hover:text-slate-200 ml-1" title="Toggle Auto-Refresh">
-                        <i class="fa-solid fa-arrows-rotate text-xs"></i>
-                    </button>
-                </div>
-            </div>
+    <!-- Header Navigation -->
+    <header class="ks-nav">
+        <div class="ks-nav-inner">
+            <a href="/mcpd" class="ks-brand">
+                <div class="ks-mark"></div>
+                <div class="ks-wordmark">AGYC <span>//</span> MISSION CONTROL</div>
+            </a>
+            <nav class="ks-nav-links">
+                <a href="/mcpd" class="ks-nav-link active">Control</a>
+                <a href="/mcpd/bucket" class="ks-nav-link">Bucketloader</a>
+                <a href="https://github.com/korrectional" target="_blank" class="ks-nav-link">GitHub ↗</a>
+                <button onclick="openDispatchModal()" class="ks-btn ks-btn-primary">+ Dispatch Task</button>
+            </nav>
         </div>
     </header>
 
-    <!-- Main Container -->
-    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <main class="ks-container">
 
-        <!-- Top Metric Summary Bar -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- Active Tasks Metric -->
-            <div class="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 flex items-center space-x-4 shadow-sm">
-                <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-xl">
-                    <i class="fa-solid fa-gears"></i>
+        <!-- Top Telemetry Row -->
+        <section class="ks-hero">
+            <div class="ks-tile">
+                <div class="ks-tile-eyebrow">
+                    <span>AGYC MCP ENGINE</span>
+                    <span class="ks-pulse"></span>
                 </div>
-                <div>
-                    <div class="text-2xl font-bold tracking-tight text-white" id="metric-running-count">-</div>
-                    <div class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Running Commands</div>
-                </div>
+                <div class="ks-tile-value" style="color: var(--ks-patina);">ACTIVE</div>
+                <div class="ks-tile-sub">Host port 8001 · Kanevskyy Dev</div>
             </div>
 
-            <!-- Queued Tasks Metric -->
-            <div class="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 flex items-center space-x-4 shadow-sm">
-                <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xl">
-                    <i class="fa-solid fa-clock-rotate-left"></i>
+            <div class="ks-tile">
+                <div class="ks-tile-eyebrow">
+                    <span>MANAGED PROJECTS</span>
+                    <span class="ks-badge ks-badge-gold">DEDICATED</span>
                 </div>
-                <div>
-                    <div class="text-2xl font-bold tracking-tight text-white" id="metric-queued-count">-</div>
-                    <div class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Queued in Line</div>
-                </div>
+                <div class="ks-tile-value" id="val-managed-count">{{ status.managed_projects|length }}</div>
+                <div class="ks-tile-sub">Workspace /home/azureadmin/mcp/projects/</div>
             </div>
 
-            <!-- Projects Metric -->
-            <div class="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 flex items-center space-x-4 shadow-sm">
-                <div class="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-xl">
-                    <i class="fa-solid fa-folder-tree"></i>
+            <div class="ks-tile">
+                <div class="ks-tile-eyebrow">
+                    <span>ACTIVE TASKS</span>
+                    <span id="badge-active-tasks" class="ks-badge ks-badge-patina">0 RUNNING</span>
                 </div>
-                <div>
-                    <div class="text-2xl font-bold tracking-tight text-white" id="metric-project-count">-</div>
-                    <div class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Managed Projects</div>
-                </div>
+                <div class="ks-tile-value" id="val-active-tasks">0</div>
+                <div class="ks-tile-sub">Auto-commit checkpoint: 5m (300s)</div>
             </div>
 
-            <!-- Bucket Status Metric -->
-            <div class="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 flex items-center space-x-4 shadow-sm">
-                <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xl">
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
+            <div class="ks-tile">
+                <div class="ks-tile-eyebrow">
+                    <span>GOOGLE DRIVE BUCKET</span>
+                    <span class="ks-badge {% if bucket.drive_authenticated %}ks-badge-patina{% else %}ks-badge-danger{% endif %}">
+                        {% if bucket.drive_authenticated %}LINKED{% else %}DISCONNECTED{% endif %}
+                    </span>
                 </div>
-                <div>
-                    <div class="text-sm font-bold tracking-tight text-white flex items-center space-x-1.5" id="metric-bucket-auth">
-                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>
-                        <span>Drive Active</span>
-                    </div>
-                    <div class="text-xs text-slate-400 uppercase font-semibold tracking-wider">Bucketloader (8090)</div>
+                <div class="ks-tile-value" style="font-size: 1.6rem; margin-top: 6px;">
+                    {% if bucket.drive_authenticated %}
+                    <a href="/mcpd/bucket" style="color: var(--ks-kinpaku); text-decoration: none;">1BSAxYw...0w ↗</a>
+                    {% else %}
+                    Offline
+                    {% endif %}
                 </div>
+                <div class="ks-tile-sub">Backend port 8090 · /bucket/</div>
             </div>
-        </div>
+        </section>
 
-        <!-- Section: Active & Queued Tasks -->
-        <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-                <div>
-                    <h2 class="text-lg font-bold text-white flex items-center space-x-2">
-                        <i class="fa-solid fa-layer-group text-blue-400"></i>
-                        <span>Active Commands & Task Queues</span>
-                    </h2>
-                    <p class="text-xs text-slate-400 mt-1">Real-time status of running coding tasks, interactive stdin shells, and queued jobs.</p>
+        <!-- Active Tasks Monitor -->
+        <section style="margin-bottom: 36px;">
+            <div class="ks-section-head">
+                <div class="ks-section-title">
+                    <span>LIVE TASK EXECUTION</span>
+                    <span id="active-tasks-count" class="ks-badge ks-badge-patina">0 ACTIVE</span>
                 </div>
-                <button onclick="openDispatchModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium flex items-center space-x-2 transition shadow-md shadow-blue-600/30">
-                    <i class="fa-solid fa-plus text-xs"></i>
-                    <span>Dispatch Task</span>
-                </button>
+                <button onclick="refreshLiveStatus()" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem;">↻ Poll Now</button>
             </div>
 
-            <!-- Task List Container -->
-            <div id="tasks-container" class="space-y-4">
-                <div class="text-center py-10 text-slate-500">
-                    <i class="fa-solid fa-circle-notch fa-spin text-2xl text-blue-500 mb-2"></i>
-                    <p class="text-sm">Loading task records...</p>
+            <div id="active-tasks-container">
+                <div class="ks-tile" style="text-align: center; padding: 32px; color: var(--ks-text-muted);">
+                    <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO ACTIVE TASKS CURRENTLY RUNNING</div>
+                    <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Dispatch a new coding session to observe real-time execution.</div>
                 </div>
             </div>
         </section>
 
-        <!-- Section: Projects Overview -->
-        <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-            <div class="flex items-center justify-between border-b border-slate-800/80 pb-4">
-                <div>
-                    <h2 class="text-lg font-bold text-white flex items-center space-x-2">
-                        <i class="fa-solid fa-code-branch text-purple-400"></i>
-                        <span>Tracked Projects & Repositories</span>
-                    </h2>
-                    <p class="text-xs text-slate-400 mt-1">Autonomous coding workspaces linked with GitHub origins and dynamic web routes.</p>
+        <!-- Projects Registry -->
+        <section style="margin-bottom: 36px;">
+            <div class="ks-section-head">
+                <div class="ks-section-title">
+                    <span>PROJECTS REGISTRY</span>
+                    <div class="ks-tabs">
+                        <button id="tab-managed" class="ks-tab active" onclick="switchProjectTab('managed')">Managed ({{ status.managed_projects|length }})</button>
+                        <button id="tab-host" class="ks-tab" onclick="switchProjectTab('host')">Host Infrastructure ({{ status.host_services|length }})</button>
+                    </div>
                 </div>
-                <div class="text-xs text-slate-400">
-                    Auto-checkpoints active every 5 mins
-                </div>
+                <button onclick="openDispatchModal()" class="ks-btn ks-btn-secondary">+ New Project Task</button>
             </div>
 
-            <!-- Projects Grid -->
-            <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                <div class="text-center py-10 text-slate-500 col-span-full">
-                    <i class="fa-solid fa-circle-notch fa-spin text-2xl text-purple-500 mb-2"></i>
-                    <p class="text-sm">Loading projects...</p>
+            <!-- Managed Projects Tab -->
+            <div id="grid-managed-projects" class="ks-grid">
+                {% for p in status.managed_projects %}
+                <div class="ks-card">
+                    <div>
+                        <div class="ks-card-header">
+                            <div class="ks-card-title">{{ p.name }}</div>
+                            <span class="ks-badge ks-badge-gold">MANAGED</span>
+                        </div>
+                        <div class="ks-card-desc">{{ p.description or 'Dedicated AGYC MCP project directory' }}</div>
+                        
+                        <div class="ks-card-meta">
+                            <div class="ks-card-meta-row">
+                                <span class="ks-card-meta-label">Branch</span>
+                                <span class="ks-card-meta-val" style="color: var(--ks-patina);">{{ p.branch or 'main' }}</span>
+                            </div>
+                            <div class="ks-card-meta-row">
+                                <span class="ks-card-meta-label">Commit</span>
+                                <span class="ks-card-meta-val" title="{{ p.commit }}">{{ p.commit or 'Synced' }}</span>
+                            </div>
+                            <div class="ks-card-meta-row">
+                                <span class="ks-card-meta-label">Path</span>
+                                <span class="ks-card-meta-val" title="{{ p.path }}">{{ p.path }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ks-card-actions">
+                        {% if p.github_url %}
+                        <a href="{{ p.github_url.split('\n')[0] }}" target="_blank" class="ks-btn ks-btn-secondary" style="flex: 1; font-size: 0.75rem;">GitHub ↗</a>
+                        {% endif %}
+                        <button onclick="triggerCommit('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">Commit Checkpoint</button>
+                        <button onclick="openDispatchForProject('{{ p.name }}')" class="ks-btn ks-btn-primary" style="font-size: 0.75rem;">Dispatch</button>
+                    </div>
                 </div>
+                {% endfor %}
+            </div>
+
+            <!-- Host Infrastructure Tab -->
+            <div id="grid-host-services" class="ks-grid" style="display: none;">
+                {% for p in status.host_services %}
+                <div class="ks-card">
+                    <div>
+                        <div class="ks-card-header">
+                            <div class="ks-card-title">{{ p.name }}</div>
+                            <span class="ks-badge ks-badge-neutral">HOST SERVICE</span>
+                        </div>
+                        <div class="ks-card-desc">{{ p.description or 'Host server directory' }}</div>
+                        
+                        <div class="ks-card-meta">
+                            <div class="ks-card-meta-row">
+                                <span class="ks-card-meta-label">Location</span>
+                                <span class="ks-card-meta-val" title="{{ p.path }}">{{ p.path }}</span>
+                            </div>
+                            <div class="ks-card-meta-row">
+                                <span class="ks-card-meta-label">Git Status</span>
+                                <span class="ks-card-meta-val">{% if p.dirty %}<span style="color: var(--ks-vermilion);">{{ p.dirty_count }} uncommitted</span>{% else %}<span style="color: var(--ks-patina);">Clean</span>{% endif %}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="ks-card-actions">
+                        <button onclick="triggerCommit('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="flex: 1; font-size: 0.75rem;">Commit Checkpoint</button>
+                        <button onclick="openDispatchForProject('{{ p.name }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">Task</button>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </section>
 
-        <!-- Section: AGYC Usage & Command Terminal -->
-        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Quota & Limits Card -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
-                <h3 class="text-md font-bold text-white flex items-center space-x-2">
-                    <i class="fa-solid fa-chart-pie text-emerald-400"></i>
-                    <span>AGYC Quotas & Limits</span>
-                </h3>
-                <div id="usage-container" class="space-y-3 text-sm">
-                    <div class="text-slate-500 text-xs py-4 text-center">Loading usage data...</div>
+        <!-- AGYC Terminal & Slash Command Runner -->
+        <section>
+            <div class="ks-section-head">
+                <div class="ks-section-title">
+                    <span>AGYC COMMAND RUNNER & QUOTA INSPECTOR</span>
+                    <span class="ks-badge ks-badge-gold">TERMINAL</span>
                 </div>
-                <button onclick="refreshUsage()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition">
-                    <i class="fa-solid fa-rotate-right mr-1"></i> Check /usage
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="runAgycCommand('/usage')" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem;">/usage</button>
+                    <button onclick="runAgycCommand('/models')" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem;">/models</button>
+                </div>
             </div>
 
-            <!-- Slash Command Runner -->
-            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl lg:col-span-2 space-y-4 flex flex-col">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-md font-bold text-white flex items-center space-x-2">
-                        <i class="fa-solid fa-terminal text-blue-400"></i>
-                        <span>AGYC Command Runner</span>
-                    </h3>
-                    <div class="flex space-x-2">
-                        <button onclick="runQuickCommand('/usage')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700">/usage</button>
-                        <button onclick="runQuickCommand('/models')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs border border-slate-700">/models</button>
+            <div class="ks-terminal">
+                <div class="ks-terminal-head">
+                    <div class="ks-terminal-dots">
+                        <div class="ks-dot ks-dot-red"></div>
+                        <div class="ks-dot ks-dot-yellow"></div>
+                        <div class="ks-dot ks-dot-green"></div>
                     </div>
+                    <span style="font-family: var(--ks-font-mono); font-size: 0.6875rem; color: var(--ks-text-faint);">agyc terminal emulator</span>
+                    <button onclick="clearTerminal()" style="background: none; border: none; color: var(--ks-text-faint); cursor: pointer; font-family: var(--ks-font-mono); font-size: 0.6875rem;">clear</button>
                 </div>
-
-                <div class="flex-1 bg-slate-950 rounded-xl p-4 font-mono text-xs text-slate-300 custom-scroll overflow-y-auto max-h-56 min-h-[140px] border border-slate-800/80 whitespace-pre-wrap" id="command-output">
-[Ready] Type an agyc slash command or prompt below...
+                <div id="terminal-body" class="ks-terminal-body">$ Ready. Click /usage or type a slash command to run against the host AGYC environment.</div>
+                <div class="ks-terminal-input-bar">
+                    <span style="color: var(--ks-kinpaku); font-family: var(--ks-font-mono); display: flex; align-items: center;">&gt;</span>
+                    <input id="cmd-input" type="text" placeholder="Type agyc command (e.g. /usage, /models)..." class="ks-input" onkeydown="if(event.key==='Enter') executeCommandInput()">
+                    <button onclick="executeCommandInput()" class="ks-btn ks-btn-primary" style="font-size: 0.75rem; padding: 6px 14px;">Run</button>
                 </div>
-
-                <form onsubmit="executeCommand(event)" class="flex space-x-2">
-                    <input type="text" id="cmd-input" placeholder="e.g. /usage, /models, or coding prompt" class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono">
-                    <button type="submit" id="cmd-submit-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition shadow-md">
-                        <i class="fa-solid fa-paper-plane mr-1 text-xs"></i> Run
-                    </button>
-                </form>
             </div>
         </section>
 
     </main>
 
-    <!-- Modal: Task Output Logs -->
-    <div id="logs-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/50">
-                <div class="flex items-center space-x-3">
-                    <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
-                    <h3 class="font-bold text-white text-md font-mono" id="modal-task-title">Task Output</h3>
-                </div>
-                <button onclick="closeLogsModal()" class="text-slate-400 hover:text-white text-lg">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+    <!-- Dispatch Task Modal -->
+    <div id="modal-dispatch" class="ks-modal-overlay">
+        <div class="ks-modal">
+            <div class="ks-modal-head">
+                <div style="font-family: var(--ks-font-display); font-size: 1.3rem; color: var(--ks-champagne);">DISPATCH AUTONOMOUS TASK</div>
+                <button onclick="closeDispatchModal()" style="background: none; border: none; color: var(--ks-text-muted); cursor: pointer; font-size: 1.2rem;">✕</button>
             </div>
-            <div class="p-4 bg-slate-950 flex-1 overflow-y-auto custom-scroll font-mono text-xs text-slate-300 whitespace-pre-wrap" id="modal-logs-content">
-                Loading logs...
-            </div>
-            <div class="px-6 py-3 border-t border-slate-800/80 bg-slate-900 flex justify-between items-center text-xs text-slate-400">
-                <span id="modal-task-meta">Status: Running</span>
-                <button onclick="closeLogsModal()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal: Dispatch Task -->
-    <div id="dispatch-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/50">
-                <h3 class="font-bold text-white text-md flex items-center space-x-2">
-                    <i class="fa-solid fa-rocket text-blue-400"></i>
-                    <span>Dispatch Autonomous Task</span>
-                </h3>
-                <button onclick="closeDispatchModal()" class="text-slate-400 hover:text-white text-lg">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <form onsubmit="handleDispatchTask(event)" class="p-6 space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Target Project</label>
-                    <select id="dispatch-project" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
-                        <!-- Populated by JS -->
+            <form id="form-dispatch" onsubmit="submitDispatch(event)">
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Target Project</label>
+                    <select id="dispatch-project" class="ks-input" style="width: 100%;">
+                        {% for p in status.managed_projects %}
+                        <option value="{{ p.name }}">{{ p.name }} (Managed)</option>
+                        {% endfor %}
+                        {% for p in status.host_services %}
+                        <option value="{{ p.name }}">{{ p.name }} (Host)</option>
+                        {% endfor %}
                     </select>
                 </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Task Instructions (Prompt)</label>
-                    <textarea id="dispatch-prompt" required rows="4" placeholder="Describe the feature to build, bug to fix, or script to run..." class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-sans"></textarea>
+                <div style="margin-bottom: 14px;">
+                    <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Task Prompt</label>
+                    <textarea id="dispatch-prompt" class="ks-input" rows="4" style="width: 100%; resize: vertical;" placeholder="Describe what the agent should implement, test, and commit..." required></textarea>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Model (Optional)</label>
-                        <input type="text" id="dispatch-model" placeholder="default" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
+                        <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Model Override</label>
+                        <input id="dispatch-model" type="text" class="ks-input" style="width: 100%;" placeholder="e.g. gemini-2.5-pro (default: default)">
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Effort Level</label>
-                        <select id="dispatch-effort" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500">
-                            <option value="">Standard</option>
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
+                        <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Effort / Reasoning</label>
+                        <select id="dispatch-effort" class="ks-input" style="width: 100%;">
+                            <option value="">Default (Agent default)</option>
+                            <option value="high">High Effort</option>
+                            <option value="medium">Medium Effort</option>
+                            <option value="low">Low Effort</option>
                         </select>
                     </div>
                 </div>
-                <div class="pt-2 flex justify-end space-x-3">
-                    <button type="button" onclick="closeDispatchModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium">Cancel</button>
-                    <button type="submit" id="dispatch-submit-btn" class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium shadow-md shadow-blue-500/20">Queue & Launch</button>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" onclick="closeDispatchModal()" class="ks-btn ks-btn-secondary">Cancel</button>
+                    <button type="submit" class="ks-btn ks-btn-primary">Queue & Dispatch Task</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+    <!-- Stdin Input Modal -->
+    <div id="modal-stdin" class="ks-modal-overlay">
+        <div class="ks-modal">
+            <div class="ks-modal-head">
+                <div style="font-family: var(--ks-font-display); font-size: 1.3rem; color: var(--ks-champagne);">SEND STDIN TO TASK</div>
+                <button onclick="closeStdinModal()" style="background: none; border: none; color: var(--ks-text-muted); cursor: pointer; font-size: 1.2rem;">✕</button>
+            </div>
+            <div id="stdin-task-title" style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-kinpaku); margin-bottom: 12px;"></div>
+            <form id="form-stdin" onsubmit="submitStdin(event)">
+                <input type="hidden" id="stdin-task-id">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 6px;">Input String (Auto-Enter enabled)</label>
+                    <input id="stdin-text" type="text" class="ks-input" style="width: 100%;" placeholder="e.g. 1, y, yes, custom command..." required autofocus>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                    <button type="button" onclick="closeStdinModal()" class="ks-btn ks-btn-secondary">Cancel</button>
+                    <button type="submit" class="ks-btn ks-btn-primary">Send to Shell</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    <!-- Frontend Scripting -->
     <script>
-        let autoRefresh = true;
-        let refreshTimer = null;
-        let projectsCache = [];
+        let currentTab = 'managed';
 
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            const bg = type === 'success' ? 'bg-emerald-600 text-white' : type === 'error' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-200 border border-slate-700';
-            toast.className = `${bg} px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium flex items-center space-x-2 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0`;
-            toast.innerHTML = `<i class="fa-solid ${type === 'success' ? 'fa-check' : type === 'error' ? 'fa-triangle-exclamation' : 'fa-circle-info'} text-xs"></i><span>${message}</span>`;
-            container.appendChild(toast);
-            setTimeout(() => { toast.classList.remove('translate-y-2', 'opacity-0'); }, 10);
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'translate-y-2');
-                setTimeout(() => toast.remove(), 300);
-            }, 3500);
+        function switchProjectTab(tab) {
+            currentTab = tab;
+            const btnManaged = document.getElementById('tab-managed');
+            const btnHost = document.getElementById('tab-host');
+            const gridManaged = document.getElementById('grid-managed-projects');
+            const gridHost = document.getElementById('grid-host-services');
+
+            if (tab === 'managed') {
+                btnManaged.classList.add('active');
+                btnHost.classList.remove('active');
+                gridManaged.style.display = 'grid';
+                gridHost.style.display = 'none';
+            } else {
+                btnHost.classList.add('active');
+                btnManaged.classList.remove('active');
+                gridHost.style.display = 'grid';
+                gridManaged.style.display = 'none';
+            }
         }
 
-        async function fetchStatus() {
+        async function refreshLiveStatus() {
             try {
                 const res = await fetch('/mcpd/api/status');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (!res.ok) return;
                 const data = await res.json();
-                renderMetrics(data);
-                renderTasks(data.agyc.tasks || []);
-                renderProjects(data.agyc.projects || [], data.agyc.routes || []);
-                renderUsage(data.agyc.usage || {});
-            } catch (err) {
-                console.warn('Status fetch error:', err);
-                document.getElementById('live-indicator').className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
-                document.getElementById('live-status-text').textContent = 'Reconnecting...';
-            }
-        }
+                
+                // Update tasks
+                const tasks = data.agyc?.tasks || [];
+                const running = tasks.filter(t => t.status === 'running');
+                
+                document.getElementById('val-active-tasks').textContent = running.length;
+                const badge = document.getElementById('badge-active-tasks');
+                badge.textContent = `${running.length} RUNNING`;
+                badge.className = running.length > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-neutral';
+                document.getElementById('active-tasks-count').textContent = `${running.length} ACTIVE`;
 
-        function renderMetrics(data) {
-            const tasks = data.agyc.tasks || [];
-            const running = tasks.filter(t => t.status === 'running' || t.status === 'pending').length;
-            const queued = tasks.filter(t => t.status === 'queued').length;
-            const projects = data.agyc.projects || [];
-
-            document.getElementById('metric-running-count').textContent = running;
-            document.getElementById('metric-queued-count').textContent = queued;
-            document.getElementById('metric-project-count').textContent = projects.length;
-
-            const isDriveAuth = data.bucket && data.bucket.drive_authenticated;
-            const bAuthElem = document.getElementById('metric-bucket-auth');
-            bAuthElem.innerHTML = isDriveAuth
-                ? '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span><span>Drive Active</span>'
-                : '<span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span><span>OAuth Required</span>';
-
-            document.getElementById('live-indicator').className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
-            document.getElementById('live-status-text').textContent = 'Live Synced';
-        }
-
-        function renderTasks(tasks) {
-            const container = document.getElementById('tasks-container');
-            if (!tasks || tasks.length === 0) {
-                container.innerHTML = `
-                    <div class="p-8 text-center bg-slate-950/40 rounded-xl border border-slate-800/80">
-                        <i class="fa-solid fa-mug-saucer text-3xl text-slate-600 mb-3"></i>
-                        <h4 class="text-white font-medium text-sm">No tasks running or queued</h4>
-                        <p class="text-xs text-slate-500 mt-1">Dispatch a coding task using the button above to begin.</p>
-                    </div>`;
-                return;
-            }
-
-            let html = '';
-            tasks.forEach(t => {
-                const isRunning = t.status === 'running' || t.status === 'pending';
-                const isQueued = t.status === 'queued';
-                const isCompleted = t.status === 'completed';
-                const isFailed = t.status === 'failed' || t.status === 'timed_out';
-
-                const badgeClass = isRunning ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
-                                   isQueued ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                                   isCompleted ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
-                                   'bg-rose-500/20 text-rose-300 border-rose-500/40';
-
-                html += `
-                <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-4 transition-all hover:border-slate-700">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-3 mb-3">
-                        <div class="flex items-center space-x-3">
-                            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold border ${badgeClass} uppercase tracking-wider flex items-center space-x-1">
-                                ${isRunning ? '<i class="fa-solid fa-spinner fa-spin text-[10px] mr-1"></i>' : ''}
-                                <span>${t.status}</span>
-                            </span>
-                            <span class="font-mono text-xs text-slate-400">${t.task_id}</span>
-                            <span class="text-xs font-semibold text-slate-200 bg-slate-800 px-2 py-0.5 rounded">${t.project_name}</span>
-                        </div>
-                        <div class="flex items-center space-x-2 text-xs text-slate-400">
-                            ${isQueued ? `<span class="text-amber-400 font-medium"><i class="fa-solid fa-arrows-up-to-line mr-1"></i>Queue Pos: #${t.queue_position || 1}</span>` : ''}
-                            ${t.duration_seconds ? `<span><i class="fa-regular fa-clock mr-1"></i>${t.duration_seconds}s</span>` : ''}
-                            ${t.commit ? `<span class="font-mono text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded border border-blue-800"><i class="fa-solid fa-code-commit mr-1"></i>${t.commit}</span>` : ''}
-                        </div>
-                    </div>
-
-                    <div class="text-sm text-slate-200 font-sans mb-3 line-clamp-2">
-                        ${t.prompt}
-                    </div>
-
-                    ${isRunning ? `
-                    <div class="bg-slate-900/90 rounded-lg p-2.5 border border-slate-800 flex flex-col sm:flex-row gap-2 items-center mb-3">
-                        <div class="flex-1 w-full flex items-center space-x-2">
-                            <span class="text-xs text-slate-400 font-mono pl-1"><i class="fa-solid fa-chevron-right text-blue-400 text-[10px]"></i> stdin:</span>
-                            <input type="text" id="stdin-input-${t.task_id}" placeholder="Type command/input to agyc shell..." class="flex-1 bg-slate-950 border border-slate-700/80 rounded px-2.5 py-1 text-xs text-slate-100 focus:outline-none focus:border-blue-500 font-mono" onkeydown="if(event.key==='Enter') sendTaskInput('${t.task_id}')">
-                        </div>
-                        <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
-                            <button onclick="sendTaskInput('${t.task_id}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium transition">
-                                Enter
-                            </button>
-                            <button onclick="cancelTask('${t.task_id}')" class="px-2.5 py-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded text-xs font-medium transition">
-                                Cancel
-                            </button>
-                        </div>
-                    </div>` : ''}
-
-                    <div class="flex items-center justify-between pt-1 text-xs">
-                        <span class="text-slate-500 font-mono text-[11px]">${t.created_at || ''}</span>
-                        <div class="flex space-x-2">
-                            ${isQueued ? `
-                            <button onclick="cancelTask('${t.task_id}')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded text-xs transition">
-                                Cancel Queued
-                            </button>` : ''}
-                            <button onclick="viewTaskLogs('${t.task_id}')" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-medium border border-slate-700 flex items-center space-x-1.5 transition">
-                                <i class="fa-solid fa-file-lines text-xs text-slate-400"></i>
-                                <span>Output & Logs</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            container.innerHTML = html;
-        }
-
-        function renderProjects(projects, routes) {
-            projectsCache = projects;
-            const selectElem = document.getElementById('dispatch-project');
-            selectElem.innerHTML = projects.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
-
-            const grid = document.getElementById('projects-grid');
-            if (!projects || projects.length === 0) {
-                grid.innerHTML = '<div class="text-slate-500 text-sm col-span-full py-8 text-center">No projects registered.</div>';
-                return;
-            }
-
-            let html = '';
-            projects.forEach(p => {
-                const route = routes.find(r => r.slug === p.name || (r.project && r.project === p.name));
-                const ghUrl = p.github_url ? p.github_url.split('\n')[0].trim() : null;
-
-                html += `
-                <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-5 flex flex-col justify-between hover:border-slate-700 transition">
-                    <div>
-                        <div class="flex items-center justify-between mb-2">
-                            <h4 class="font-bold text-white text-base">${p.name}</h4>
-                            <span class="text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-mono">
-                                ${p.auto_discovered ? 'Host Service' : 'MCP Managed'}
-                            </span>
-                        </div>
-                        <p class="text-xs text-slate-400 line-clamp-2 mb-4 leading-relaxed">${p.description || 'No description'}</p>
-                    </div>
-
-                    <div class="space-y-3 pt-3 border-t border-slate-800/80 text-xs">
-                        ${route ? `
-                        <div class="flex items-center justify-between text-slate-300">
-                            <span class="text-slate-500">Route:</span>
-                            <a href="https://kanevskyy.dev/${route.slug}/" target="_blank" class="text-blue-400 hover:underline font-mono">
-                                /${route.slug}/ <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i>
-                            </a>
-                        </div>` : ''}
-
-                        ${ghUrl ? `
-                        <div class="flex items-center justify-between text-slate-300">
-                            <span class="text-slate-500">GitHub:</span>
-                            <a href="${ghUrl}" target="_blank" class="text-purple-400 hover:underline font-mono truncate max-w-[180px]">
-                                <i class="fa-brands fa-github mr-1"></i>Repo <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1"></i>
-                            </a>
-                        </div>` : ''}
-
-                        <div class="flex items-center space-x-2 pt-2">
-                            <button onclick="openDispatchFor('${p.name}')" class="flex-1 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded text-xs font-medium transition text-center">
-                                <i class="fa-solid fa-play mr-1 text-[10px]"></i> Dispatch Task
-                            </button>
-                            <button onclick="commitProject('${p.name}')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs font-medium transition" title="Manual Git Commit & Push Checkpoint">
-                                <i class="fa-solid fa-code-commit"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>`;
-            });
-            grid.innerHTML = html;
-        }
-
-        function renderUsage(usage) {
-            const container = document.getElementById('usage-container');
-            if (!usage || !usage.metrics) {
-                container.innerHTML = '<div class="text-slate-500 text-xs py-4 text-center">Usage data not currently loaded. Click Check below.</div>';
-                return;
-            }
-
-            let html = '';
-            for (const [key, val] of Object.entries(usage.metrics)) {
-                html += `
-                <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800/80">
-                    <div class="flex justify-between items-center text-xs mb-1">
-                        <span class="text-slate-300 font-medium">${key.replace(/_/g, ' ')}</span>
-                        <span class="font-bold text-emerald-400">${val.percentage || 'N/A'}</span>
-                    </div>
-                    ${val.reset_time ? `<div class="text-[10px] text-slate-500">Resets: ${val.reset_time}</div>` : ''}
-                </div>`;
-            }
-            container.innerHTML = html || '<div class="text-slate-500 text-xs">No metrics found.</div>';
-        }
-
-        async function sendTaskInput(taskId) {
-            const input = document.getElementById(`stdin-input-${taskId}`);
-            if (!input || !input.value.trim()) return;
-            const text = input.value;
-            input.value = '';
-
-            try {
-                const form = new FormData();
-                form.append('input_text', text);
-                form.append('press_enter', 'true');
-                const res = await fetch(`/mcpd/api/tasks/${taskId}/input`, { method: 'POST', body: form });
-                const json = await res.json();
-                if (json.success) {
-                    showToast('Input delivered to active task shell', 'success');
+                const container = document.getElementById('active-tasks-container');
+                if (running.length === 0) {
+                    container.innerHTML = `
+                        <div class="ks-tile" style="text-align: center; padding: 32px; color: var(--ks-text-muted);">
+                            <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO ACTIVE TASKS CURRENTLY RUNNING</div>
+                            <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Dispatch a new coding session to observe real-time execution.</div>
+                        </div>`;
                 } else {
-                    showToast(json.error || 'Failed delivering input', 'error');
-                }
-            } catch (e) {
-                showToast(e.message, 'error');
-            }
-        }
-
-        async function cancelTask(taskId) {
-            if (!confirm(`Are you sure you want to cancel task ${taskId}?`)) return;
-            try {
-                const res = await fetch(`/mcpd/api/tasks/${taskId}/cancel`, { method: 'POST' });
-                const json = await res.json();
-                showToast(json.message || 'Task cancelled', 'info');
-                fetchStatus();
-            } catch (e) {
-                showToast(e.message, 'error');
-            }
-        }
-
-        async function viewTaskLogs(taskId) {
-            const modal = document.getElementById('logs-modal');
-            const content = document.getElementById('modal-logs-content');
-            const title = document.getElementById('modal-task-title');
-            const meta = document.getElementById('modal-task-meta');
-
-            modal.classList.remove('hidden');
-            title.textContent = `Task: ${taskId}`;
-            content.textContent = 'Fetching logs from server...';
-
-            try {
-                const res = await fetch(`/mcpd/api/tasks/${taskId}`);
-                const data = await res.json();
-                meta.textContent = `Status: ${data.status} | Exit Code: ${data.exit_code} | Checkpoints: ${data.checkpoints_count || 0}`;
-                content.textContent = data.output || data.error_output || data.error_message || '(No output recorded yet)';
-            } catch (e) {
-                content.textContent = `Error fetching logs: ${e.message}`;
-            }
-        }
-
-        function closeLogsModal() {
-            document.getElementById('logs-modal').classList.add('hidden');
-        }
-
-        function openDispatchModal() {
-            document.getElementById('dispatch-modal').classList.remove('hidden');
-        }
-
-        function closeDispatchModal() {
-            document.getElementById('dispatch-modal').classList.add('hidden');
-        }
-
-        function openDispatchFor(projectName) {
-            openDispatchModal();
-            const sel = document.getElementById('dispatch-project');
-            if (sel) sel.value = projectName;
-        }
-
-        async function handleDispatchTask(e) {
-            e.preventDefault();
-            const btn = document.getElementById('dispatch-submit-btn');
-            btn.disabled = true;
-            btn.textContent = 'Queueing...';
-
-            const form = new FormData();
-            form.append('project_name', document.getElementById('dispatch-project').value);
-            form.append('prompt', document.getElementById('dispatch-prompt').value);
-            form.append('model', document.getElementById('dispatch-model').value);
-            form.append('effort', document.getElementById('dispatch-effort').value);
-
-            try {
-                const res = await fetch('/mcpd/api/tasks/dispatch', { method: 'POST', body: form });
-                const json = await res.json();
-                if (json.success) {
-                    showToast(`Task queued: ${json.task.task_id}`, 'success');
-                    closeDispatchModal();
-                    document.getElementById('dispatch-prompt').value = '';
-                    fetchStatus();
-                } else {
-                    showToast(json.error || 'Failed to dispatch task', 'error');
+                    container.innerHTML = running.map(t => `
+                        <div class="ks-task-item">
+                            <div class="ks-task-info">
+                                <div class="ks-task-header">
+                                    <span class="ks-pulse"></span>
+                                    <span class="ks-task-id">${t.id}</span>
+                                    <span class="ks-badge ks-badge-gold">${t.project}</span>
+                                    <span class="ks-badge ks-badge-patina">PID ${t.pid || 'RUNNING'}</span>
+                                </div>
+                                <div class="ks-task-prompt">${escapeHtml(t.task)}</div>
+                                <div class="ks-task-meta">
+                                    <span>Started: ${new Date(t.started_at * 1000).toLocaleTimeString()}</span>
+                                    <span>Model: ${t.model || 'default'}</span>
+                                    <span>Effort: ${t.effort || 'default'}</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="openStdinModal('${t.id}', '${t.project}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">⌨ Send Input</button>
+                                <button onclick="cancelTask('${t.id}')" class="ks-btn ks-btn-danger" style="font-size: 0.75rem;">Cancel</button>
+                            </div>
+                        </div>
+                    `).join('');
                 }
             } catch (err) {
-                showToast(err.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Queue & Launch';
+                console.error("Status polling failed:", err);
             }
         }
 
-        async function commitProject(projectName) {
-            const msg = prompt(`Enter custom commit message for ${projectName} (or leave blank for auto):`);
-            if (msg === null) return;
-            try {
-                const form = new FormData();
-                form.append('project_name', projectName);
-                if (msg) form.append('message', msg);
-                const res = await fetch('/mcpd/api/projects/commit', { method: 'POST', body: form });
-                const json = await res.json();
-                if (json.success && json.committed) {
-                    showToast(`Committed ${json.commit_hash} & pushed!`, 'success');
-                } else {
-                    showToast(json.message || 'No modified files to commit', 'info');
-                }
-                fetchStatus();
-            } catch (e) {
-                showToast(e.message, 'error');
-            }
-        }
-
-        function runQuickCommand(cmd) {
-            document.getElementById('cmd-input').value = cmd;
-            executeCommand(new Event('submit'));
-        }
-
-        async function executeCommand(e) {
-            if (e) e.preventDefault();
-            const input = document.getElementById('cmd-input');
-            const cmd = input.value.trim();
-            if (!cmd) return;
-
-            const btn = document.getElementById('cmd-submit-btn');
-            const out = document.getElementById('command-output');
-            btn.disabled = true;
-            out.textContent = `Running '${cmd}'...\n`;
+        async function runAgycCommand(cmd) {
+            const term = document.getElementById('terminal-body');
+            term.innerHTML += `\n$ ${cmd}\n[Executing command in host AGYC environment...]`;
+            term.scrollTop = term.scrollHeight;
 
             try {
                 const form = new FormData();
                 form.append('command', cmd);
                 const res = await fetch('/mcpd/api/commands/run', { method: 'POST', body: form });
-                const json = await res.json();
-                out.textContent = json.output || json.text_summary || JSON.stringify(json, null, 2);
+                const data = await res.json();
+                if (data.success) {
+                    term.innerHTML += `\n${data.output || '(No output returned)'}\n`;
+                } else {
+                    term.innerHTML += `\nError: ${data.error || 'Execution failed'}\n`;
+                }
+            } catch (e) {
+                term.innerHTML += `\nError executing command: ${e.message}\n`;
+            }
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function executeCommandInput() {
+            const input = document.getElementById('cmd-input');
+            const cmd = input.value.trim();
+            if (!cmd) return;
+            input.value = '';
+            runAgycCommand(cmd);
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminal-body').innerHTML = "$ Ready.";
+        }
+
+        async function triggerCommit(projectName) {
+            if (!confirm(`Create git checkpoint commit for ${projectName}?`)) return;
+            try {
+                const form = new FormData();
+                form.append('project_name', projectName);
+                const res = await fetch('/mcpd/api/projects/commit', { method: 'POST', body: form });
+                const data = await res.json();
+                alert(data.message || (data.success ? 'Committed & pushed!' : 'Commit completed'));
+                refreshLiveStatus();
+            } catch (e) {
+                alert(`Commit error: ${e.message}`);
+            }
+        }
+
+        function openDispatchModal() {
+            document.getElementById('modal-dispatch').style.display = 'flex';
+        }
+
+        function openDispatchForProject(name) {
+            const sel = document.getElementById('dispatch-project');
+            sel.value = name;
+            openDispatchModal();
+        }
+
+        function closeDispatchModal() {
+            document.getElementById('modal-dispatch').style.display = 'none';
+        }
+
+        async function submitDispatch(e) {
+            e.preventDefault();
+            const proj = document.getElementById('dispatch-project').value;
+            const prompt = document.getElementById('dispatch-prompt').value;
+            const model = document.getElementById('dispatch-model').value.trim();
+            const effort = document.getElementById('dispatch-effort').value;
+
+            const form = new FormData();
+            form.append('project_name', proj);
+            form.append('prompt', prompt);
+            if (model) form.append('model', model);
+            if (effort) form.append('effort', effort);
+
+            try {
+                const res = await fetch('/mcpd/api/tasks/dispatch', { method: 'POST', body: form });
+                const data = await res.json();
+                if (data.success) {
+                    closeDispatchModal();
+                    document.getElementById('dispatch-prompt').value = '';
+                    refreshLiveStatus();
+                } else {
+                    alert(`Failed to queue task: ${data.error}`);
+                }
             } catch (err) {
-                out.textContent = `Command error: ${err.message}`;
-            } finally {
-                btn.disabled = false;
+                alert(`Error dispatching task: ${err.message}`);
             }
         }
 
-        async function refreshUsage() {
-            runQuickCommand('/usage');
+        function openStdinModal(taskId, project) {
+            document.getElementById('stdin-task-id').value = taskId;
+            document.getElementById('stdin-task-title').textContent = `Task: ${taskId} (${project})`;
+            document.getElementById('stdin-text').value = '';
+            document.getElementById('modal-stdin').style.display = 'flex';
+            document.getElementById('stdin-text').focus();
         }
 
-        function toggleAutoRefresh() {
-            autoRefresh = !autoRefresh;
-            showToast(`Auto-refresh ${autoRefresh ? 'enabled' : 'paused'}`, 'info');
-            if (autoRefresh) {
-                fetchStatus();
-                refreshTimer = setInterval(fetchStatus, 3000);
-            } else {
-                clearInterval(refreshTimer);
+        function closeStdinModal() {
+            document.getElementById('modal-stdin').style.display = 'none';
+        }
+
+        async function submitStdin(e) {
+            e.preventDefault();
+            const taskId = document.getElementById('stdin-task-id').value;
+            const text = document.getElementById('stdin-text').value;
+
+            const form = new FormData();
+            form.append('input_text', text);
+            form.append('press_enter', 'true');
+
+            try {
+                const res = await fetch(`/mcpd/api/tasks/${taskId}/input`, { method: 'POST', body: form });
+                const data = await res.json();
+                closeStdinModal();
+                alert(data.success ? 'Input delivered to running task.' : `Error: ${data.error}`);
+            } catch (err) {
+                alert(`Error: ${err.message}`);
             }
         }
 
-        // Initialize
-        fetchStatus();
-        refreshTimer = setInterval(fetchStatus, 3000);
+        async function cancelTask(taskId) {
+            if (!confirm(`Cancel task ${taskId}?`)) return;
+            try {
+                await fetch(`/mcpd/api/tasks/${taskId}/cancel`, { method: 'POST' });
+                refreshLiveStatus();
+            } catch (e) {
+                alert(`Cancel failed: ${e.message}`);
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        // Auto poll every 4 seconds
+        setInterval(refreshLiveStatus, 4000);
+        refreshLiveStatus();
     </script>
 </body>
 </html>

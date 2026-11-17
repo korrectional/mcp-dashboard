@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import logging
+import subprocess
 from typing import Optional, Dict, Any, List
 import httpx
 from fastapi import FastAPI, Request, Response, Form, File, UploadFile, HTTPException, Query, status
@@ -15,11 +16,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("mcp_dashboard")
 
-app = FastAPI(title="MCP Mission Control & Bucketloader Manager", version="1.0.0")
+app = FastAPI(title="AGYC Mission Control & Bucketloader Manager", version="2.0.0")
 
 # Service Configuration
 AGYC_MCP_URL = os.environ.get("AGYC_MCP_URL", "http://127.0.0.1:8001")
 BUCKET_URL = os.environ.get("BUCKET_URL", "http://127.0.0.1:8090")
+MCP_PROJECTS_ROOT = os.environ.get("MCP_PROJECTS_ROOT", "/home/azureadmin/mcp/projects")
 
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 os.makedirs(TEMPLATES_DIR, exist_ok=True)
@@ -49,21 +51,56 @@ def get_bucket_api_key() -> str:
                 pass
     return ""
 
+def _get_git_info(project_path: str) -> Dict[str, Any]:
+    """Inspects git repository status for a given project directory."""
+    info = {
+        "branch": "none",
+        "commit": "No commits",
+        "dirty": False,
+        "dirty_count": 0,
+        "has_git": False
+    }
+    if not project_path or not os.path.exists(os.path.join(project_path, ".git")):
+        return info
+    
+    info["has_git"] = True
+    try:
+        # Branch
+        b_res = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=project_path, capture_output=True, text=True, timeout=2)
+        if b_res.returncode == 0 and b_res.stdout.strip():
+            info["branch"] = b_res.stdout.strip()
+        
+        # Last commit
+        c_res = subprocess.run(["git", "log", "-1", "--format=%h - %s (%cr)"], cwd=project_path, capture_output=True, text=True, timeout=2)
+        if c_res.returncode == 0 and c_res.stdout.strip():
+            info["commit"] = c_res.stdout.strip()
+        
+        # Status / uncommitted changes
+        s_res = subprocess.run(["git", "status", "--porcelain"], cwd=project_path, capture_output=True, text=True, timeout=2)
+        if s_res.returncode == 0:
+            lines = [l for l in s_res.stdout.strip().splitlines() if l.strip()]
+            info["dirty_count"] = len(lines)
+            info["dirty"] = len(lines) > 0
+    except Exception as e:
+        logger.debug("Git info fetch error for %s: %s", project_path, e)
+    return info
+
 async def fetch_agyc_status() -> Dict[str, Any]:
     """Fetch live projects, tasks, and routes directly from agyc-mcp internal server."""
     result = {
         "projects": [],
+        "managed_projects": [],
+        "host_services": [],
         "tasks": [],
         "routes": [],
         "usage": {},
         "online": False
     }
     try:
-        # Import directly if running on the same host for maximum performance
         sys.path.insert(0, "/home/azureadmin/agyc-mcp")
         try:
             from src.server import list_projects, list_tasks, list_routes, get_agyc_usage
-            result["projects"] = list_projects()
+            raw_projects = list_projects()
             result["tasks"] = list_tasks(limit=30)
             result["routes"] = list_routes()
             try:
@@ -71,11 +108,59 @@ async def fetch_agyc_status() -> Dict[str, Any]:
             except Exception:
                 result["usage"] = {}
             result["online"] = True
+
+            # Process and categorize projects
+            managed = []
+            host = []
+            all_projs = []
+
+            for p in raw_projects:
+                path = p.get("path", "")
+                name = p.get("name", "")
+
+                # Filter out invalid / phantom Windows paths on Linux
+                if os.name != "nt" and (":\\" in path or path.startswith("C:")):
+                    continue
+                if path and not os.path.exists(path):
+                    continue
+
+                # Enrich with live git data
+                git_data = _get_git_info(path)
+                p_copy = dict(p)
+                p_copy.update({
+                    "git": git_data,
+                    "branch": git_data["branch"],
+                    "commit": git_data["commit"],
+                    "dirty": git_data["dirty"],
+                    "dirty_count": git_data["dirty_count"]
+                })
+
+                # Determine if project is dedicated managed project
+                is_managed = (
+                    not p.get("auto_discovered", False)
+                    or path.startswith(MCP_PROJECTS_ROOT)
+                    or name in ("bucketloader", "animation-renderer", "bucket-script", "mcp-dashboard")
+                )
+                p_copy["is_managed"] = is_managed
+
+                all_projs.append(p_copy)
+                if is_managed:
+                    managed.append(p_copy)
+                else:
+                    host.append(p_copy)
+
+            # Sort managed projects alphabetically
+            managed.sort(key=lambda x: x["name"])
+            host.sort(key=lambda x: x["name"])
+
+            result["projects"] = all_projs
+            result["managed_projects"] = managed
+            result["host_services"] = host
             return result
         except Exception as e:
-            logger.debug("Direct import fallback: %s", e)
+            logger.warning("Direct import exception: %s", e)
 
-        # Fallback to HTTP API
+        # HTTP Fallback
         async with httpx.AsyncClient(timeout=4.0) as client:
             resp = await client.get(f"{AGYC_MCP_URL}/")
             if resp.status_code == 200:
@@ -119,7 +204,7 @@ async def fetch_bucket_files() -> List[Dict[str, Any]]:
 @app.get("/mcpd", response_class=HTMLResponse)
 @app.get("/mcpd/", response_class=HTMLResponse)
 async def dashboard_page(request: Request):
-    """Main MCP Control Center dashboard."""
+    """Main AGYC Control Center dashboard."""
     status_data = await fetch_agyc_status()
     bucket_data = await fetch_bucket_health()
     template = jinja_env.get_template("dashboard.html")
