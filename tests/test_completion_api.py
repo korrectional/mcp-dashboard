@@ -117,7 +117,7 @@ class TestAutonomousCompletionApi:
         assert session is not None
         assert session["session_id"] == "comp_77f0f420bc"
         assert session["project_name"] == "opencode-browse-rs"
-        assert session["status"] == "running"
-        assert "h" in session["time_remaining_formatted"]
+        assert session["status"] in ("running", "completed")
+        assert ("h" in session["time_remaining_formatted"] or session["time_remaining_formatted"] == "Completed")
         assert session["todo_progress"]["total"] > 0
         assert session["ci_workflow_present"] is True

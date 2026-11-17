@@ -127,7 +127,7 @@ class CompletionSession:
         self.ui_tests_output: Optional[str] = None
 
         self._stop_event = threading.Event()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     @property
     def time_remaining_seconds(self) -> int:
@@ -158,7 +158,6 @@ class CompletionSession:
                 "started_at": self.started_at,
                 "expires_at": self.expires_at,
                 "elapsed_seconds": self.elapsed_seconds,
-                "elapsed_formatted": self._format_duration(self.elapsed_seconds),
                 "time_remaining_seconds": self.time_remaining_seconds,
                 "time_remaining_formatted": self._format_duration(self.time_remaining_seconds),
                 "duration_hours": round(self.duration_seconds / 3600, 2),
@@ -177,6 +176,43 @@ class CompletionSession:
                 "error": self.error,
             }
 
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "CompletionSession":
+        obj = cls(
+            session_id=d["session_id"],
+            project_name=d["project_name"],
+            working_dir=d.get("working_dir", ""),
+            goal=d.get("goal", ""),
+            duration_hours=d.get("duration_hours", 4.0),
+            check_interval_seconds=d.get("check_interval_seconds", 300),
+        )
+        obj.status = d.get("status", "running")
+        obj.started_at = d.get("started_at", obj.started_at)
+        obj.expires_at = d.get("expires_at", obj.expires_at)
+        if "expires_at" in d:
+            try:
+                dt = datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00"))
+                obj.expire_timestamp = dt.timestamp()
+            except Exception:
+                pass
+        obj.iteration = d.get("iteration", 0)
+        obj.current_task_id = d.get("current_task_id")
+        obj.last_phase = d.get("last_phase", "Initializing")
+        obj.last_check_at = d.get("last_check_at")
+        obj.last_test_output = d.get("last_test_output")
+        obj.tests_passing = d.get("tests_passing")
+        obj.ci_workflow_present = d.get("ci_workflow_present", False)
+        obj.todo_progress = d.get("todo_progress", {"total": 0, "completed": 0, "pending": 0, "percent": 0})
+        obj.history = d.get("history", [])
+        obj.error = d.get("error")
+        if "workers" in d and isinstance(d["workers"], dict):
+            obj.workers.update(d["workers"])
+        obj.ui_tests_detected = d.get("ui_tests_detected", False)
+        obj.ui_tests_passing = d.get("ui_tests_passing")
+        obj.ui_tests_runner = d.get("ui_tests_runner")
+        obj.ui_tests_output = d.get("ui_tests_output")
+        return obj
+
     @staticmethod
     def _format_duration(seconds: int) -> str:
         hours = seconds // 3600
@@ -190,12 +226,62 @@ class CompletionSession:
 class CompletionLoopManager:
     """Orchestrates autonomous multi-turn 4-hour completion sessions."""
 
-    def __init__(self, task_manager=None, project_manager=None):
+    def __init__(self, task_manager=None, project_manager=None, data_file: Optional[str] = None):
         self.task_manager = task_manager
         self.project_manager = project_manager
+        
+        # Resolve canonical data directory
+        data_dir = os.environ.get("COMPLETIONS_DATA_DIR")
+        if not data_dir:
+            agyc_data = "/home/azureadmin/agyc-mcp/data"
+            if os.path.isdir(agyc_data):
+                data_dir = agyc_data
+            else:
+                data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data"))
+        self.data_file = data_file or os.path.join(data_dir, "completions.json")
         self.sessions: Dict[str, CompletionSession] = {}
         self.threads: Dict[str, threading.Thread] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        self._load()
+
+    def _load(self):
+        """Loads and auto-resumes completion sessions across service restarts."""
+        if not os.path.isfile(self.data_file):
+            return
+        try:
+            with open(self.data_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            now = time.time()
+            for sid, sdata in data.items():
+                session = CompletionSession.from_dict(sdata)
+                self.sessions[sid] = session
+                if session.status == "running":
+                    if session.expire_timestamp > now:
+                        logger.info("Resuming active 4-hour completion loop %s for %s (%ds remaining)",
+                                    sid, session.project_name, session.time_remaining_seconds)
+                        th = threading.Thread(
+                            target=self._run_loop,
+                            args=(session,),
+                            daemon=True,
+                            name=f"Completer-{sid}"
+                        )
+                        self.threads[sid] = th
+                        th.start()
+                    else:
+                        session.status = "completed"
+        except Exception as e:
+            logger.error("Failed to load completions data file: %s", e)
+
+    def _save(self):
+        """Persists all completion sessions to disk."""
+        try:
+            os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
+            with self._lock:
+                snapshot = {sid: s.to_dict() for sid, s in self.sessions.items()}
+            with open(self.data_file, "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, indent=2)
+        except Exception as e:
+            logger.error("Failed to save completions data file: %s", e)
 
     def start_completion(
         self,
@@ -260,6 +346,7 @@ class CompletionLoopManager:
                 check_interval_seconds=check_interval_seconds,
             )
             self.sessions[session_id] = session
+            self._save()
 
             th = threading.Thread(
                 target=self._run_loop,
@@ -272,7 +359,7 @@ class CompletionLoopManager:
             logger.info("Started 4-hour completion loop session %s for %s", session_id, clean_name)
             return session.to_dict()
 
-    def get_session(self, identifier: str) -> Optional[Any]:
+    def get_session(self, identifier: str) -> Optional[CompletionSession]:
         """Finds session by session_id or project_name."""
         with self._lock:
             if identifier in self.sessions:
@@ -281,18 +368,6 @@ class CompletionLoopManager:
             for s in reversed(list(self.sessions.values())):
                 if s.project_name == clean:
                     return s
-            completions_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
-            if os.path.isfile(completions_file):
-                try:
-                    with open(completions_file, "r", encoding="utf-8") as f:
-                        file_data = json.load(f)
-                        if isinstance(file_data, list):
-                            for item in file_data:
-                                if isinstance(item, dict):
-                                    if item.get("session_id") == identifier or item.get("project_name") == clean:
-                                        return item
-                except Exception:
-                    pass
         return None
 
     def cancel_session(self, identifier: str) -> Dict[str, Any]:
@@ -300,60 +375,20 @@ class CompletionLoopManager:
         session = self.get_session(identifier)
         if not session:
             return {"success": False, "error": f"No completion session found matching '{identifier}'"}
-        if hasattr(session, "cancel"):
-            session.cancel()
-            s_dict = session.to_dict()
-        else:
-            session["status"] = "cancelled"
-            s_dict = session
-        completions_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
-        if os.path.isfile(completions_file):
-            try:
-                with open(completions_file, "r", encoding="utf-8") as f:
-                    file_data = json.load(f)
-                if isinstance(file_data, list):
-                    for item in file_data:
-                        if isinstance(item, dict) and item.get("session_id") == s_dict.get("session_id"):
-                            item["status"] = "cancelled"
-                    with open(completions_file, "w", encoding="utf-8") as f:
-                        json.dump(file_data, f, indent=2)
-            except Exception:
-                pass
-        sid = s_dict.get("session_id", identifier)
-        logger.info("Cancelled completion session %s", sid)
-        return {"success": True, "message": f"Session {sid} cancelled.", "session": s_dict}
+        session.cancel()
+        self._save()
+        logger.info("Cancelled completion session %s", session.session_id)
+        return {"success": True, "message": f"Session {session.session_id} cancelled.", "session": session.to_dict()}
 
     def list_sessions(self, project_name: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
         """Lists completion sessions sorted by start time descending."""
         with self._lock:
             sessions_list = list(self.sessions.values())
-            completions_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "completions.json")
-            if os.path.isfile(completions_file):
-                try:
-                    with open(completions_file, "r", encoding="utf-8") as f:
-                        file_data = json.load(f)
-                        if isinstance(file_data, list):
-                            existing_ids = {s.session_id for s in sessions_list}
-                            for item in file_data:
-                                if isinstance(item, dict) and item.get("session_id") not in existing_ids:
-                                    sessions_list.append(item)
-                except Exception:
-                    pass
-
             if project_name:
-                clean_name = os.path.basename(project_name.strip("/")).lower()
-                sessions_list = [
-                    s for s in sessions_list
-                    if (s.project_name if hasattr(s, "project_name") else str(s.get("project_name", "")).lower()) == clean_name
-                ]
-
-            def sort_key(s):
-                if hasattr(s, "start_timestamp"):
-                    return s.start_timestamp
-                return s.get("start_timestamp") or 0
-
-            sessions_list.sort(key=sort_key, reverse=True)
-            return [s.to_dict() if hasattr(s, "to_dict") else s for s in sessions_list[:limit]]
+                clean_name = os.path.basename(project_name.strip("/"))
+                sessions_list = [s for s in sessions_list if s.project_name == clean_name]
+            sessions_list.sort(key=lambda s: s.start_timestamp, reverse=True)
+            return [s.to_dict() for s in sessions_list[:limit]]
 
     # ==========================================================================
     # Project Inspection Helpers
@@ -665,6 +700,9 @@ class CompletionLoopManager:
                             logger.error("Failed to queue worker %s for %s: %s", role_key, session.project_name, ex)
                             session.error = str(ex)
 
+            if any_dispatched:
+                self._save()
+
             # 3. Sleep interval: check every 20s if workers are active, up to check_interval_seconds
             rem = session.time_remaining_seconds
             active_any = any(w.get("status") in ("pending", "running") for w in session.workers.values())
@@ -674,6 +712,7 @@ class CompletionLoopManager:
 
         if session.status == "running":
             session.status = "completed" if time.time() >= session.expire_timestamp else "cancelled"
+        self._save()
         logger.info("Exited completion loop for %s with status %s", session.project_name, session.status)
 
     def _formulate_worker_prompt(
@@ -767,6 +806,27 @@ REQUIRED ACTIONS:
             return phase, prompt
 
         else: # feature_builder
+            if pending_items:
+                next_item = pending_items[0]
+                phase = f"Feature Delivery: {next_item[:30]}"
+                items_preview = "\n".join(f"- {it}" for it in pending_items[:5])
+                prompt = f"""[AUTONOMOUS COMPLETION LOOP - INSTANCE 3: FEATURE DELIVERY LEAD | Time Remaining: {time_rem}]
+PRIMARY APPLICATION GOAL: {session.goal}
+YOUR ROLE: Feature Implementation & Roadmap Lead
+CURRENT MILESTONE: {next_item}
+
+REMAINING TODO ITEMS ({len(pending_items)} pending):
+{items_preview}
+
+REQUIRED ACTIONS:
+1. Implement the feature: "{next_item}".
+2. Integrate cleanly with existing modules and verify zero compilation/runtime regressions.
+3. Update `TODO.md`: mark this milestone as `- [x]`.
+4. Stage and commit your work:
+   `git add . && git commit -m "feat: implement {next_item[:40]}" && git push` (if remote is configured).
+"""
+                return phase, prompt
+
             if not ci_ok:
                 phase = "GitHub Actions CI Workflow Setup"
                 prompt = f"""[AUTONOMOUS COMPLETION LOOP - INSTANCE 3: FEATURE DELIVERY LEAD | Time Remaining: {time_rem}]
@@ -784,27 +844,6 @@ REQUIRED ACTIONS:
 4. Mark CI workflow milestone in `TODO.md` as `- [x]`.
 5. Stage and commit:
    `git add . && git commit -m "ci: add GitHub Actions workflow tests (.github/workflows/ci.yml)" && git push` (if remote is configured).
-"""
-                return phase, prompt
-
-            if pending_items:
-                next_item = pending_items[0]
-                phase = f"Feature Delivery: {next_item[:30]}"
-                items_preview = "\n".join(f"- {it}" for it in pending_items[:5])
-                prompt = f"""[AUTONOMOUS COMPLETION LOOP - INSTANCE 3: FEATURE DELIVERY LEAD | Time Remaining: {time_rem}]
-PRIMARY APPLICATION GOAL: {session.goal}
-YOUR ROLE: Feature Implementation & Roadmap Lead
-CURRENT MILESTONE: {next_item}
-
-REMAINING TODO ITEMS ({len(pending_items)} pending):
-{items_preview}
-
-REQUIRED ACTIONS:
-1. Implement the feature: "{next_item}".
-2. Integrate cleanly with existing modules and verify zero compilation/runtime regressions.
-3. Update `TODO.md`: mark this milestone as `- [x]`.
-4. Stage and commit:
-   `git add . && git commit -m "feat: implement {next_item[:40]}" && git push` (if remote is configured).
 """
                 return phase, prompt
 
@@ -854,7 +893,7 @@ REQUIRED ACTIONS:
             return self._formulate_worker_prompt(
                 role="feature_builder",
                 session=session,
-                todo_data=todo_data,
+                todo_data={"pending_items": []},
                 tests_ok=tests_ok,
                 test_output=test_output,
                 ui_detected=False,

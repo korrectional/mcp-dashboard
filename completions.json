@@ -4,7 +4,7 @@
     "project_name": "opencode-browse-rs",
     "working_dir": "/home/azureadmin/mcp/projects/opencode-browse-rs",
     "goal": "Rewrite OpenCode Browse (https://github.com/anomalyco/browse) completely in idiomatic, production-grade Rust.",
-    "status": "running",
+    "status": "completed",
     "iteration": 2,
     "current_task_id": "task_d32878b623",
     "last_phase": "Automated Test Suite Creation",
@@ -14,19 +14,23 @@
     "duration_seconds": 14400,
     "expires_at": "2026-11-17T10:19:02.622617+00:00",
     "expire_timestamp": 1794910742.622617,
+    "elapsed_seconds": 14400,
+    "elapsed_formatted": "4h 0m",
+    "time_remaining_seconds": 0,
+    "time_remaining_formatted": "Completed",
     "tests_passing": false,
     "ci_workflow_present": true,
     "workers": {
       "error_hunter": {
         "role": "Error & Bug Hunter",
-        "status": "working",
+        "status": "completed",
         "phase": "Static Analysis & Runtime Error Audit",
         "iteration": 2,
         "task_id": "task_d32878b623"
       },
       "test_engineer": {
         "role": "Thorough Test & UI Automation Engineer",
-        "status": "running",
+        "status": "completed",
         "phase": "Authoring & Running Unit, Integration & Actual UI Tests",
         "iteration": 2,
         "task_id": "task_d32878b623"
@@ -39,14 +43,6 @@
         "task_id": "task_85462ccd84"
       }
     }
-  },
-  {
-    "session_id": "comp_12345",
-    "project_name": "cli-snake",
-    "goal": "build complete game",
-    "duration_hours": 4.0,
-    "status": "running",
-    "success": true
   },
   {
     "session_id": "comp_demo_hist01",
@@ -98,5 +94,125 @@
         "phase": "Features Delivered"
       }
     }
+  },
+  {
+    "session_id": "comp_7fd2a65545",
+    "project_name": "opencode-browse-rs",
+    "working_dir": "/home/azureadmin/mcp/projects/opencode-browse-rs",
+    "goal": "Rewrite OpenCode Browse (https://github.com/anomalyco/browse) completely in idiomatic, production-grade Rust with async tokio runtime, full MCP stdio tools, Chromium Native Messaging host, Manifest V3 extension, installer, thorough unit and CLI/integration tests.",
+    "status": "running",
+    "iteration": 0,
+    "current_task_id": "task_82587756bb",
+    "last_phase": "Feature Delivery & Roadmap Lead: Feature Delivery: Initialize project structure, ",
+    "started_at": "2026-11-17T14:40:51.605790+00:00",
+    "expires_at": "2026-11-17T18:40:51.605787+00:00",
+    "elapsed_seconds": 109,
+    "time_remaining_seconds": 14196,
+    "time_remaining_formatted": "3h 56m 36s",
+    "duration_hours": 4.0,
+    "check_interval_seconds": 300,
+    "last_check_at": "2026-11-17T14:44:09.545791+00:00",
+    "tests_passing": false,
+    "ci_workflow_present": true,
+    "ui_tests_detected": false,
+    "ui_tests_passing": null,
+    "ui_tests_runner": "none",
+    "ui_tests_output": "NO_UI_TESTS_DETECTED: No Playwright, Cypress, or interactive CLI/UI test suites found yet.",
+    "workers": {
+      "error_hunter": {
+        "role": "Error & Bug Hunter",
+        "task_id": "task_a2488166b0",
+        "status": "running",
+        "phase": "Bug Fixing & Error Auditing",
+        "iteration": 1,
+        "last_dispatched_at": "2026-11-17T14:42:26.039998+00:00"
+      },
+      "test_engineer": {
+        "role": "Thorough Test & UI Automation Engineer",
+        "task_id": "task_53665ba3ab",
+        "status": "running",
+        "phase": "Thorough Test Suite & Actual UI Tests",
+        "iteration": 1,
+        "last_dispatched_at": "2026-11-17T14:42:26.041641+00:00"
+      },
+      "feature_builder": {
+        "role": "Feature Delivery & Roadmap Lead",
+        "task_id": "task_82587756bb",
+        "status": "running",
+        "phase": "Feature Delivery: Initialize project structure, ",
+        "iteration": 1,
+        "last_dispatched_at": "2026-11-17T14:42:26.048900+00:00"
+      }
+    },
+    "active_workers_count": 3,
+    "todo_progress": {
+      "total": 14,
+      "completed": 3,
+      "pending": 11,
+      "percent": 21.4
+    },
+    "history_count": 3,
+    "error": null,
+    "duration_seconds": 14400
+  },
+  {
+    "session_id": "comp_a37f2b9106",
+    "project_name": "comp-test-proj",
+    "working_dir": "/tmp/tmprx_ra053/projects/comp-test-proj",
+    "goal": "Build complete app",
+    "status": "cancelled",
+    "iteration": 0,
+    "current_task_id": "task_e0fda36428",
+    "last_phase": "Thorough Test & UI Automation Engineer: Thorough Test Suite & Actual UI Tests",
+    "started_at": "2026-11-17T14:38:08.695726+00:00",
+    "expires_at": "2026-11-17T16:38:08.695725+00:00",
+    "elapsed_seconds": 109,
+    "time_remaining_seconds": 0,
+    "time_remaining_formatted": "Cancelled",
+    "duration_hours": 2.0,
+    "check_interval_seconds": 300,
+    "last_check_at": "2026-11-17T14:38:08.696087+00:00",
+    "tests_passing": false,
+    "ci_workflow_present": false,
+    "ui_tests_detected": false,
+    "ui_tests_passing": null,
+    "ui_tests_runner": "none",
+    "ui_tests_output": "NO_UI_TESTS_DETECTED: No Playwright, Cypress, or interactive CLI/UI test suites found yet.",
+    "workers": {
+      "error_hunter": {
+        "role": "Error & Bug Hunter",
+        "task_id": "task_2bb35bd8d4",
+        "status": "running",
+        "phase": "Bug Fixing & Error Auditing",
+        "iteration": 1,
+        "last_dispatched_at": "2026-11-17T14:38:08.698387+00:00"
+      },
+      "test_engineer": {
+        "role": "Thorough Test & UI Automation Engineer",
+        "task_id": "task_e0fda36428",
+        "status": "running",
+        "phase": "Thorough Test Suite & Actual UI Tests",
+        "iteration": 1,
+        "last_dispatched_at": "2026-11-17T14:38:08.699256+00:00"
+      },
+      "feature_builder": {
+        "role": "Feature Delivery & Roadmap Lead",
+        "task_id": null,
+        "status": "idle",
+        "phase": "GitHub Actions CI Workflow Setup",
+        "iteration": 1,
+        "last_dispatched_at": null
+      }
+    },
+    "active_workers_count": 2,
+    "todo_progress": {
+      "total": 5,
+      "completed": 1,
+      "pending": 4,
+      "percent": 0.0
+    },
+    "history_count": 0,
+    "error": "[Errno 17] File exists: '/tmp/tmprx_ra053/projects/comp-test-proj'",
+    "duration_seconds": 7200
   }
 ]

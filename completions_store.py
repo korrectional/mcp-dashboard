@@ -43,19 +43,23 @@ SEED_COMPLETION_SESSIONS = [
         "duration_seconds": 14400,
         "expires_at": "2026-11-17T10:19:02.622617+00:00",
         "expire_timestamp": 1794910742.622617,
+        "elapsed_seconds": 14400,
+        "elapsed_formatted": "4h 0m",
+        "time_remaining_seconds": 10800,
+        "time_remaining_formatted": "3h 0m 0s",
         "tests_passing": False,
         "ci_workflow_present": True,
         "workers": {
             "error_hunter": {
                 "role": "Error & Bug Hunter",
-                "status": "working",
+                "status": "completed",
                 "phase": "Static Analysis & Runtime Error Audit",
                 "iteration": 2,
                 "task_id": "task_d32878b623"
             },
             "test_engineer": {
                 "role": "Thorough Test & UI Automation Engineer",
-                "status": "running",
+                "status": "completed",
                 "phase": "Authoring & Running Unit, Integration & Actual UI Tests",
                 "iteration": 2,
                 "task_id": "task_d32878b623"
@@ -225,6 +229,26 @@ class CompletionStore:
             if sid not in self._sessions:
                 self._sessions[sid] = dict(seed)
 
+        # 4. Check for expired sessions and remove stale synthetic sessions on load
+        now = time.time()
+        for sid, s in list(self._sessions.items()):
+            start_ts = s.get("start_timestamp")
+            started_at_str = s.get("started_at")
+            if started_at_str and not start_ts:
+                try:
+                    start_ts = datetime.fromisoformat(started_at_str).timestamp()
+                    s["start_timestamp"] = start_ts
+                except Exception:
+                    pass
+            duration_hours = float(s.get("duration_hours", 4.0))
+            expire_ts = (start_ts + duration_hours * 3600) if start_ts else s.get("expire_timestamp")
+            if expire_ts and now >= expire_ts and s.get("status") == "running":
+                s["status"] = "completed"
+                s["time_remaining_seconds"] = 0
+                s["time_remaining_formatted"] = "Completed"
+            elif not start_ts and not started_at_str and s.get("status") == "running" and sid == "comp_12345":
+                self._sessions.pop(sid, None)
+
         self._save()
 
     def _save(self):
@@ -245,9 +269,71 @@ class CompletionStore:
             return session
         existing = self._sessions.get(sid, {})
         merged = {**existing, **session}
+        now_dt = datetime.now(timezone.utc)
+        if "started_at" not in merged and "start_timestamp" not in merged:
+            merged["started_at"] = now_dt.isoformat()
+            merged["start_timestamp"] = now_dt.timestamp()
+        duration_hours = float(merged.get("duration_hours", 4.0))
+        duration_seconds = int(duration_hours * 3600)
+        merged["duration_seconds"] = duration_seconds
+        merged["duration_hours"] = duration_hours
+        if merged.get("start_timestamp") and "expires_at" not in merged:
+            exp_ts = merged["start_timestamp"] + duration_seconds
+            merged["expire_timestamp"] = exp_ts
+            merged["expires_at"] = datetime.fromtimestamp(exp_ts, timezone.utc).isoformat()
+        if merged.get("status") in ("completed", "cancelled", "failed"):
+            merged["time_remaining_seconds"] = 0
+            merged["time_remaining_formatted"] = "Completed" if merged["status"] == "completed" else merged["status"].capitalize()
         self._sessions[sid] = merged
         self._save()
         return merged
+
+    def reconcile_with_live(self, live_sessions: List[Dict[str, Any]], project_name: Optional[str] = None):
+        """
+        Reconciles cached sessions with live sessions from agyc-mcp.
+        Any cached session marked 'running' that is NOT in live active sessions
+        is transitioned to 'completed' / 'expired' (or removed if synthetic).
+        """
+        live_active_sids = {
+            s["session_id"] for s in live_sessions 
+            if isinstance(s, dict) and s.get("session_id") and s.get("status") == "running"
+        }
+        
+        changed = False
+        to_remove = []
+        for sid, session in list(self._sessions.items()):
+            if project_name:
+                clean = os.path.basename(project_name.strip("/")).lower()
+                if session.get("project_name", "").lower() != clean:
+                    continue
+
+            # Check if synthetic seed/mock entry with no real data (e.g. comp_12345)
+            is_synthetic = (
+                sid == "comp_12345" or 
+                (not session.get("started_at") and not session.get("workers") and not session.get("working_dir"))
+            )
+            
+            if session.get("status") == "running":
+                if sid not in live_active_sids:
+                    if is_synthetic:
+                        to_remove.append(sid)
+                        changed = True
+                    else:
+                        session["status"] = "completed"
+                        session["time_remaining_seconds"] = 0
+                        session["time_remaining_formatted"] = "Completed"
+                        workers = session.get("workers")
+                        if isinstance(workers, dict):
+                            for w in workers.values():
+                                if isinstance(w, dict) and w.get("status") in ("running", "working"):
+                                    w["status"] = "completed"
+                        changed = True
+
+        for sid in to_remove:
+            self._sessions.pop(sid, None)
+
+        if changed:
+            self._save()
 
     def cancel_session(self, session_id: str) -> bool:
         if session_id in self._sessions:
@@ -307,13 +393,23 @@ class CompletionStore:
         if status == "running" and now >= expire_ts:
             status = "completed"
             s["status"] = status
+            sid = s.get("session_id")
+            if sid and sid in self._sessions:
+                self._sessions[sid]["status"] = "completed"
+                self._sessions[sid]["time_remaining_seconds"] = 0
+                self._sessions[sid]["time_remaining_formatted"] = "Completed"
 
         elapsed = max(0, int(now - start_ts))
         time_rem = max(0, int(expire_ts - now)) if status == "running" else 0
 
         s["elapsed_seconds"] = elapsed
         s["time_remaining_seconds"] = time_rem
-        s["time_remaining_formatted"] = _format_seconds(time_rem) if status == "running" else "Finished"
+        if status == "running":
+            s["time_remaining_formatted"] = _format_seconds(time_rem)
+        elif status == "completed":
+            s["time_remaining_formatted"] = "Completed"
+        else:
+            s["time_remaining_formatted"] = status.capitalize()
         s["elapsed_formatted"] = _format_seconds(elapsed)
 
         working_dir = s.get("working_dir")
@@ -368,13 +464,16 @@ async def fetch_live_completions(project_name: Optional[str] = None) -> List[Dic
     Fetches real-time completion sessions from all available sources:
     1. agyc-mcp internal server via MCP tools/call (HTTP/SSE)
     2. Local CompletionStore with persistent sessions
-    3. Auto-discovery from project TODO.md roadmaps
+    3. Auto-reconciles stale cached state with live status
     """
     # 1. Query agyc-mcp via MCP
     mcp_res = await query_mcp_tool("list_completions", {"project_name": project_name} if project_name else {})
-    normalized_mcp = _normalize_session_list(mcp_res)
-    for s in normalized_mcp:
-        completion_store.add_or_update(s)
+    if mcp_res is not None:
+        normalized_mcp = _normalize_session_list(mcp_res)
+        for s in normalized_mcp:
+            completion_store.add_or_update(s)
+        # Reconcile stale cached sessions against live agyc-mcp state
+        completion_store.reconcile_with_live(normalized_mcp, project_name=project_name)
 
     # 2. Return refreshed sessions from store
     return completion_store.list_sessions(project_name=project_name)
@@ -385,6 +484,14 @@ async def get_completion_by_id(session_id: str) -> Optional[Dict[str, Any]]:
     mcp_res = await query_mcp_tool("get_completion_status", {"session_id": session_id})
     if isinstance(mcp_res, dict) and not mcp_res.get("error") and mcp_res.get("session_id"):
         return completion_store.add_or_update(mcp_res)
+    # If MCP returned error / session not found, reconcile any stale running cached entry
+    if isinstance(mcp_res, dict) and mcp_res.get("error"):
+        cached = completion_store.get_session(session_id)
+        if cached and cached.get("status") == "running":
+            cached["status"] = "completed"
+            cached["time_remaining_seconds"] = 0
+            cached["time_remaining_formatted"] = "Completed"
+            return completion_store.add_or_update(cached)
     return completion_store.get_session(session_id)
 
 
