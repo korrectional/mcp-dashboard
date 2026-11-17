@@ -100,18 +100,18 @@
     "project_name": "opencode-browse-rs",
     "working_dir": "/home/azureadmin/mcp/projects/opencode-browse-rs",
     "goal": "Rewrite OpenCode Browse (https://github.com/anomalyco/browse) completely in idiomatic, production-grade Rust with async tokio runtime, full MCP stdio tools, Chromium Native Messaging host, Manifest V3 extension, installer, thorough unit and CLI/integration tests.",
-    "status": "running",
+    "status": "cancelled",
     "iteration": 0,
-    "current_task_id": "task_82587756bb",
+    "current_task_id": "task_57560d6f49",
     "last_phase": "Feature Delivery & Roadmap Lead: Feature Delivery: Initialize project structure, ",
     "started_at": "2026-11-17T14:40:51.605790+00:00",
     "expires_at": "2026-11-17T18:40:51.605787+00:00",
-    "elapsed_seconds": 109,
-    "time_remaining_seconds": 14196,
-    "time_remaining_formatted": "3h 56m 36s",
+    "elapsed_seconds": 1447,
+    "time_remaining_seconds": 0,
+    "time_remaining_formatted": "Cancelled",
     "duration_hours": 4.0,
     "check_interval_seconds": 300,
-    "last_check_at": "2026-11-17T14:44:09.545791+00:00",
+    "last_check_at": "2026-11-17T15:23:44.869246+00:00",
     "tests_passing": false,
     "ci_workflow_present": true,
     "ui_tests_detected": false,
@@ -119,41 +119,50 @@
     "ui_tests_runner": "none",
     "ui_tests_output": "NO_UI_TESTS_DETECTED: No Playwright, Cypress, or interactive CLI/UI test suites found yet.",
     "workers": {
+      "autonomous_lead": {
+        "role": "Autonomous Lead Engineer",
+        "task_id": null,
+        "status": "idle",
+        "phase": "Initializing",
+        "iteration": 0,
+        "last_dispatched_at": null
+      },
       "error_hunter": {
         "role": "Error & Bug Hunter",
-        "task_id": "task_a2488166b0",
-        "status": "running",
+        "task_id": "task_b1b885e9c5",
+        "status": "cancelled",
         "phase": "Bug Fixing & Error Auditing",
-        "iteration": 1,
-        "last_dispatched_at": "2026-11-17T14:42:26.039998+00:00"
+        "iteration": 3,
+        "last_dispatched_at": "2026-11-17T15:15:47.972061+00:00"
       },
       "test_engineer": {
         "role": "Thorough Test & UI Automation Engineer",
-        "task_id": "task_53665ba3ab",
-        "status": "running",
+        "task_id": "task_b0384df286",
+        "status": "cancelled",
         "phase": "Thorough Test Suite & Actual UI Tests",
-        "iteration": 1,
-        "last_dispatched_at": "2026-11-17T14:42:26.041641+00:00"
+        "iteration": 3,
+        "last_dispatched_at": "2026-11-17T15:16:07.978741+00:00"
       },
       "feature_builder": {
         "role": "Feature Delivery & Roadmap Lead",
-        "task_id": "task_82587756bb",
-        "status": "running",
+        "task_id": "task_57560d6f49",
+        "status": "cancelled",
         "phase": "Feature Delivery: Initialize project structure, ",
-        "iteration": 1,
-        "last_dispatched_at": "2026-11-17T14:42:26.048900+00:00"
+        "iteration": 3,
+        "last_dispatched_at": "2026-11-17T15:16:34.934894+00:00"
       }
     },
-    "active_workers_count": 3,
+    "active_workers_count": 0,
     "todo_progress": {
       "total": 14,
       "completed": 3,
       "pending": 11,
       "percent": 21.4
     },
-    "history_count": 3,
+    "history_count": 0,
     "error": null,
-    "duration_seconds": 14400
+    "duration_seconds": 14400,
+    "start_timestamp": 1794926451.60579
   },
   {
     "session_id": "comp_a37f2b9106",
@@ -166,7 +175,7 @@
     "last_phase": "Thorough Test & UI Automation Engineer: Thorough Test Suite & Actual UI Tests",
     "started_at": "2026-11-17T14:38:08.695726+00:00",
     "expires_at": "2026-11-17T16:38:08.695725+00:00",
-    "elapsed_seconds": 109,
+    "elapsed_seconds": 1447,
     "time_remaining_seconds": 0,
     "time_remaining_formatted": "Cancelled",
     "duration_hours": 2.0,
@@ -179,10 +188,18 @@
     "ui_tests_runner": "none",
     "ui_tests_output": "NO_UI_TESTS_DETECTED: No Playwright, Cypress, or interactive CLI/UI test suites found yet.",
     "workers": {
+      "autonomous_lead": {
+        "role": "Autonomous Lead Engineer",
+        "task_id": null,
+        "status": "idle",
+        "phase": "Initializing",
+        "iteration": 0,
+        "last_dispatched_at": null
+      },
       "error_hunter": {
         "role": "Error & Bug Hunter",
         "task_id": "task_2bb35bd8d4",
-        "status": "running",
+        "status": "cancelled",
         "phase": "Bug Fixing & Error Auditing",
         "iteration": 1,
         "last_dispatched_at": "2026-11-17T14:38:08.698387+00:00"
@@ -190,7 +207,7 @@
       "test_engineer": {
         "role": "Thorough Test & UI Automation Engineer",
         "task_id": "task_e0fda36428",
-        "status": "running",
+        "status": "cancelled",
         "phase": "Thorough Test Suite & Actual UI Tests",
         "iteration": 1,
         "last_dispatched_at": "2026-11-17T14:38:08.699256+00:00"
@@ -198,13 +215,13 @@
       "feature_builder": {
         "role": "Feature Delivery & Roadmap Lead",
         "task_id": null,
-        "status": "idle",
+        "status": "cancelled",
         "phase": "GitHub Actions CI Workflow Setup",
         "iteration": 1,
         "last_dispatched_at": null
       }
     },
-    "active_workers_count": 2,
+    "active_workers_count": 0,
     "todo_progress": {
       "total": 5,
       "completed": 1,
@@ -213,6 +230,20 @@
     },
     "history_count": 0,
     "error": "[Errno 17] File exists: '/tmp/tmprx_ra053/projects/comp-test-proj'",
-    "duration_seconds": 7200
+    "duration_seconds": 7200,
+    "start_timestamp": 1794926288.695726
+  },
+  {
+    "session_id": "comp_12345",
+    "project_name": "cli-snake",
+    "goal": "build complete game",
+    "duration_hours": 4.0,
+    "status": "running",
+    "success": true,
+    "started_at": "2026-11-17T17:34:53.226421+00:00",
+    "start_timestamp": 1794936893.226421,
+    "duration_seconds": 14400,
+    "expire_timestamp": 1794951293.226421,
+    "expires_at": "2026-11-17T21:34:53.226421+00:00"
   }
 ]
