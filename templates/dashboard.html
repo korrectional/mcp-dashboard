@@ -700,6 +700,70 @@
             </div>
         </section>
 
+        <!-- Past Tasks Archive (Google Drive Bucket: mcp-database/) -->
+        <section style="margin-bottom: 36px;">
+            <div class="ks-section-head">
+                <div class="ks-section-title">
+                    <span>PAST TASKS ARCHIVE</span>
+                    <span id="past-tasks-badge" class="ks-badge ks-badge-gold">LAST 5 ARCHIVED</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <a href="/mcpd/bucket" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem; text-decoration: none;">mcp-database/ in Bucket ↗</a>
+                    <a href="/mcpd/api/bucket/raw/mcp-database/tasks.json/download" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem; text-decoration: none;" title="Download full JSON archive">tasks.json ↓</a>
+                    <button onclick="refreshPastTasks()" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem;">↻ Refresh</button>
+                </div>
+            </div>
+
+            <div style="font-size: 0.75rem; color: var(--ks-text-muted); margin-bottom: 14px; font-family: var(--ks-font-mono); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <span>Bandwidth-optimized view: displaying the 5 most recent tasks stored in Google Drive (<span style="color: var(--ks-kinpaku);">mcp-database/tasks.json</span>).</span>
+                <span style="color: var(--ks-text-faint);">Cached &amp; paged for low data usage</span>
+            </div>
+
+            <div id="past-tasks-container">
+                {% if past_tasks and past_tasks|length > 0 %}
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    {% for t in past_tasks %}
+                    <div class="ks-task-item" style="border-left: 3px solid {% if t.status == 'completed' %}var(--ks-patina){% elif t.status == 'failed' or t.status == 'timed_out' %}var(--ks-vermilion){% else %}var(--ks-rule){% endif %};">
+                        <div class="ks-task-info">
+                            <div class="ks-task-header">
+                                <span class="ks-task-id">{{ t.task_id }}</span>
+                                <span class="ks-badge ks-badge-gold">{{ t.project_name or 'project' }}</span>
+                                <span class="ks-badge {% if t.status == 'completed' %}ks-badge-patina{% elif t.status == 'failed' or t.status == 'timed_out' %}ks-badge-danger{% else %}ks-badge-neutral{% endif %}">
+                                    {{ (t.status or 'ARCHIVED')|upper }}
+                                </span>
+                                {% if t.duration_seconds is defined and t.duration_seconds is not none %}
+                                <span style="font-family: var(--ks-font-mono); font-size: 0.6875rem; color: var(--ks-text-faint);">{{ t.duration_seconds }}s</span>
+                                {% endif %}
+                            </div>
+                            <div class="ks-task-prompt" style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">
+                                {{ t.prompt }}
+                            </div>
+                            <div class="ks-task-meta">
+                                <span>Finished: {{ t.completed_at or t.created_at or 'Archived' }}</span>
+                                {% if t.exit_code is defined and t.exit_code is not none %}
+                                <span>Exit code: {{ t.exit_code }}</span>
+                                {% endif %}
+                                {% if t.model %}
+                                <span>Model: {{ t.model }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button onclick="viewTaskLogs('{{ t.task_id }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; height: 32px; padding: 0 12px;">View Output</button>
+                            <a href="/mcpd/api/bucket/raw/mcp-database/{{ t.task_id }}.json/download" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; height: 32px; padding: 0 10px; text-decoration: none;" title="Download Task JSON">JSON ↓</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="ks-tile" style="text-align: center; padding: 32px; color: var(--ks-text-muted);">
+                    <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO PAST TASKS IN MCP-DATABASE</div>
+                    <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Completed tasks will automatically archive into Google Drive bucket folder mcp-database/.</div>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
         <!-- Projects Registry -->
         <section style="margin-bottom: 36px;">
             <div class="ks-section-head">
@@ -887,8 +951,40 @@
         </div>
     </div>
 
+    <!-- Task Details & Output Modal -->
+    <div id="modal-task-view" class="ks-modal-overlay">
+        <div class="ks-modal" style="max-width: 840px; width: 92%;">
+            <div class="ks-modal-head">
+                <div>
+                    <div style="font-family: var(--ks-font-display); font-size: 1.3rem; color: var(--ks-champagne);" id="modal-task-title">TASK DETAILS</div>
+                    <div style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 2px;" id="modal-task-subtitle"></div>
+                </div>
+                <button onclick="closeTaskViewModal()" style="background: none; border: none; color: var(--ks-text-muted); cursor: pointer; font-size: 1.2rem;">✕</button>
+            </div>
+            
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 4px;">Task Prompt</label>
+                <div id="modal-task-prompt" style="font-family: var(--ks-font-mono); font-size: 0.8125rem; color: var(--ks-champagne); background: var(--ks-lacquer-deep); padding: 10px; border-radius: var(--ks-radius-xs); border: 1px solid var(--ks-rule); word-break: break-word;"></div>
+            </div>
+
+            <div style="margin-bottom: 14px;">
+                <label style="display: block; font-family: var(--ks-font-mono); font-size: 0.6875rem; text-transform: uppercase; color: var(--ks-text-faint); margin-bottom: 4px;">Task Output / Terminal Logs</label>
+                <pre id="modal-task-output" style="font-family: var(--ks-font-mono); font-size: 0.75rem; color: var(--ks-text-warm); background: var(--ks-lacquer-deep); padding: 12px; border-radius: var(--ks-radius-xs); border: 1px solid var(--ks-rule); max-height: 340px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin: 0;"></pre>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div id="modal-task-meta" style="font-family: var(--ks-font-mono); font-size: 0.6875rem; color: var(--ks-text-faint);"></div>
+                <div style="display: flex; gap: 8px;">
+                    <a id="modal-task-download" href="#" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; text-decoration: none;">Download JSON ↓</a>
+                    <button type="button" onclick="closeTaskViewModal()" class="ks-btn ks-btn-primary">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentTab = 'managed';
+        let lastRunningCount = 0;
 
         function switchProjectTab(tab) {
             currentTab = tab;
@@ -917,14 +1013,20 @@
                 const data = await res.json();
                 
                 // Update tasks
-                const tasks = data.agyc?.tasks || [];
-                const running = tasks.filter(t => t.status === 'running');
+                const allTasks = data.tasks || data.agyc?.tasks || [];
+                const running = allTasks.filter(t => t.status === 'running' || t.status === 'pending' || t.status === 'queued');
                 
                 document.getElementById('val-active-tasks').textContent = running.length;
                 const badge = document.getElementById('badge-active-tasks');
                 badge.textContent = `${running.length} RUNNING`;
                 badge.className = running.length > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-neutral';
                 document.getElementById('active-tasks-count').textContent = `${running.length} ACTIVE`;
+
+                // If a task just completed, auto refresh past tasks archive
+                if (lastRunningCount > running.length) {
+                    refreshPastTasks();
+                }
+                lastRunningCount = running.length;
 
                 const container = document.getElementById('active-tasks-container');
                 if (running.length === 0) {
@@ -934,32 +1036,138 @@
                             <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Dispatch a new coding session to observe real-time execution.</div>
                         </div>`;
                 } else {
-                    container.innerHTML = running.map(t => `
+                    container.innerHTML = running.map(t => {
+                        const tid = t.task_id || t.id;
+                        const tproj = t.project_name || t.project || 'project';
+                        const tprompt = t.prompt || t.task || '';
+                        const tstatus = (t.status || 'running').toUpperCase();
+                        const tstarted = t.started_at ? (typeof t.started_at === 'number' ? new Date(t.started_at * 1000).toLocaleTimeString() : t.started_at) : 'Just now';
+                        return `
                         <div class="ks-task-item">
                             <div class="ks-task-info">
                                 <div class="ks-task-header">
                                     <span class="ks-pulse"></span>
-                                    <span class="ks-task-id">${t.id}</span>
-                                    <span class="ks-badge ks-badge-gold">${t.project}</span>
-                                    <span class="ks-badge ks-badge-patina">PID ${t.pid || 'RUNNING'}</span>
+                                    <span class="ks-task-id">${tid}</span>
+                                    <span class="ks-badge ks-badge-gold">${escapeHtml(tproj)}</span>
+                                    <span class="ks-badge ks-badge-patina">${tstatus}</span>
                                 </div>
-                                <div class="ks-task-prompt">${escapeHtml(t.task)}</div>
+                                <div class="ks-task-prompt" style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">${escapeHtml(tprompt)}</div>
                                 <div class="ks-task-meta">
-                                    <span>Started: ${new Date(t.started_at * 1000).toLocaleTimeString()}</span>
+                                    <span>Started: ${tstarted}</span>
                                     <span>Model: ${t.model || 'default'}</span>
                                     <span>Effort: ${t.effort || 'default'}</span>
                                 </div>
                             </div>
                             <div style="display: flex; gap: 8px;">
-                                <button onclick="openStdinModal('${t.id}', '${t.project}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">⌨ Send Input</button>
-                                <button onclick="cancelTask('${t.id}')" class="ks-btn ks-btn-danger" style="font-size: 0.75rem;">Cancel</button>
+                                <button onclick="openStdinModal('${tid}', '${tproj}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">⌨ Send Input</button>
+                                <button onclick="cancelTask('${tid}')" class="ks-btn ks-btn-danger" style="font-size: 0.75rem;">Cancel</button>
                             </div>
                         </div>
-                    `).join('');
+                    `;
+                    }).join('');
                 }
             } catch (err) {
                 console.error("Status polling failed:", err);
             }
+        }
+
+        async function viewTaskLogs(taskId) {
+            document.getElementById('modal-task-title').textContent = `TASK: ${taskId}`;
+            document.getElementById('modal-task-subtitle').textContent = 'Loading from bucket archive...';
+            document.getElementById('modal-task-prompt').textContent = 'Loading...';
+            document.getElementById('modal-task-output').textContent = 'Fetching task record from Google Drive (mcp-database/)...';
+            document.getElementById('modal-task-meta').textContent = '';
+            document.getElementById('modal-task-download').href = `/mcpd/api/bucket/raw/mcp-database/${taskId}.json/download`;
+            document.getElementById('modal-task-view').style.display = 'flex';
+
+            try {
+                const res = await fetch(`/mcpd/api/tasks/past/${taskId}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const t = await res.json();
+                
+                document.getElementById('modal-task-title').textContent = `TASK: ${t.task_id || taskId}`;
+                const durText = t.duration_seconds !== undefined && t.duration_seconds !== null ? ` · Duration: ${t.duration_seconds}s` : '';
+                document.getElementById('modal-task-subtitle').textContent = `Project: ${t.project_name || 'N/A'} · Status: ${(t.status || 'unknown').toUpperCase()}${durText}`;
+                document.getElementById('modal-task-prompt').textContent = t.prompt || '(No prompt)';
+                
+                let output = t.output || t.stdout || t.error || '';
+                if (t.stderr) {
+                    output += (output ? '\n\n' : '') + `STDERR:\n${t.stderr}`;
+                }
+                if (!output) {
+                    output = '(No output recorded for this task)';
+                }
+                document.getElementById('modal-task-output').textContent = output;
+                document.getElementById('modal-task-meta').textContent = `Created: ${t.created_at || 'N/A'} | Completed: ${t.completed_at || 'N/A'} | Exit: ${t.exit_code !== undefined ? t.exit_code : 'N/A'}`;
+            } catch (err) {
+                document.getElementById('modal-task-output').textContent = `Error loading task details: ${err.message}`;
+            }
+        }
+
+        function closeTaskViewModal() {
+            document.getElementById('modal-task-view').style.display = 'none';
+        }
+
+        async function refreshPastTasks() {
+            try {
+                const res = await fetch('/mcpd/api/tasks/past?limit=5&force=true');
+                if (!res.ok) return;
+                const data = await res.json();
+                renderPastTasks(data.tasks || []);
+            } catch (e) {
+                console.error("Refresh past tasks error:", e);
+            }
+        }
+
+        function renderPastTasks(tasks) {
+            const container = document.getElementById('past-tasks-container');
+            if (!tasks || tasks.length === 0) {
+                container.innerHTML = `
+                    <div class="ks-tile" style="text-align: center; padding: 32px; color: var(--ks-text-muted);">
+                        <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO PAST TASKS IN MCP-DATABASE</div>
+                        <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Completed tasks will automatically archive into Google Drive bucket folder mcp-database/.</div>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    ${tasks.map(t => {
+                        const isSuccess = t.status === 'completed';
+                        const isFail = t.status === 'failed' || t.status === 'timed_out';
+                        const badgeClass = isSuccess ? 'ks-badge-patina' : (isFail ? 'ks-badge-danger' : 'ks-badge-neutral');
+                        const borderVar = isSuccess ? 'var(--ks-patina)' : (isFail ? 'var(--ks-vermilion)' : 'var(--ks-rule)');
+                        const dur = t.duration_seconds !== undefined && t.duration_seconds !== null ? `<span style="font-family: var(--ks-font-mono); font-size: 0.6875rem; color: var(--ks-text-faint);">${t.duration_seconds}s</span>` : '';
+                        const exitCode = t.exit_code !== undefined && t.exit_code !== null ? `<span>Exit code: ${t.exit_code}</span>` : '';
+                        const model = t.model ? `<span>Model: ${t.model}</span>` : '';
+
+                        return `
+                        <div class="ks-task-item" style="border-left: 3px solid ${borderVar};">
+                            <div class="ks-task-info">
+                                <div class="ks-task-header">
+                                    <span class="ks-task-id">${t.task_id}</span>
+                                    <span class="ks-badge ks-badge-gold">${escapeHtml(t.project_name || 'project')}</span>
+                                    <span class="ks-badge ${badgeClass}">${(t.status || 'ARCHIVED').toUpperCase()}</span>
+                                    ${dur}
+                                </div>
+                                <div class="ks-task-prompt" style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">
+                                    ${escapeHtml(t.prompt)}
+                                </div>
+                                <div class="ks-task-meta">
+                                    <span>Finished: ${t.completed_at || t.created_at || 'Archived'}</span>
+                                    ${exitCode}
+                                    ${model}
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <button onclick="viewTaskLogs('${t.task_id}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; height: 32px; padding: 0 12px;">View Output</button>
+                                <a href="/mcpd/api/bucket/raw/mcp-database/${t.task_id}.json/download" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem; height: 32px; padding: 0 10px; text-decoration: none;" title="Download Task JSON">JSON ↓</a>
+                            </div>
+                        </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
         }
 
         async function runAgycCommand(cmd) {

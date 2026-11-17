@@ -319,6 +319,15 @@ async def fetch_agyc_status() -> Dict[str, Any]:
             result["projects"] = all_projs
             result["managed_projects"] = managed
             result["host_services"] = host
+
+            # Auto-sync any completed/failed in-memory tasks to bucket archive
+            for t in raw_tasks:
+                st = t.get("status")
+                tid = t.get("task_id") or t.get("id")
+                if tid and st in ("completed", "failed", "cancelled", "timed_out"):
+                    if tid not in task_db_store._synced_terminal_task_ids:
+                        asyncio.create_task(task_db_store.sync_task(t))
+
             return result
         except Exception as e:
             logger.warning("Direct import exception: %s", e)
@@ -373,6 +382,142 @@ async def fetch_bucket_files() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.warning("Failed to fetch bucket files: %s", e)
         return []
+
+# ==============================================================================
+# Task History & Bucket Database Storage (mcp-database/)
+# ==============================================================================
+
+class TaskDatabaseStore:
+    """
+    Manages persistent task archive stored in Google Drive bucket under mcp-database/.
+    Enforces bandwidth conservation by limiting queries to 5 items by default and
+    caching retrieved lists in memory.
+    """
+    CACHE_TTL = 15.0  # seconds to cache past tasks in memory to prevent bandwidth & quota drain
+
+    def __init__(self):
+        self._cached_tasks: List[Dict[str, Any]] = []
+        self._last_fetch_time: float = 0.0
+        self._lock = asyncio.Lock()
+        self._synced_terminal_task_ids = set()
+
+    async def fetch_past_tasks(self, limit: int = 5, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """
+        Retrieves the most recent past tasks from mcp-database/tasks.json in the bucket.
+        Capped to `limit` (default 5) to minimize bandwidth.
+        """
+        now = time.time()
+        if not force_refresh and self._cached_tasks and (now - self._last_fetch_time < self.CACHE_TTL):
+            return self._cached_tasks[:limit]
+
+        async with self._lock:
+            if not force_refresh and self._cached_tasks and (time.time() - self._last_fetch_time < self.CACHE_TTL):
+                return self._cached_tasks[:limit]
+
+            url = f"{BUCKET_URL}/raw/mcp-database/tasks.json"
+            try:
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if isinstance(data, list):
+                            data.sort(
+                                key=lambda t: t.get("completed_at") or t.get("created_at") or "",
+                                reverse=True
+                            )
+                            self._cached_tasks = data
+                            self._last_fetch_time = time.time()
+                            for t in self._cached_tasks:
+                                tid = t.get("task_id")
+                                if tid:
+                                    self._synced_terminal_task_ids.add(tid)
+                            return self._cached_tasks[:limit]
+            except Exception as e:
+                logger.debug("Failed to fetch past tasks from bucket: %s", e)
+
+            return self._cached_tasks[:limit]
+
+    async def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a single task detail, checking memory cache first, then bucketloader."""
+        for t in self._cached_tasks:
+            if t.get("task_id") == task_id:
+                return t
+
+        # Try individual task file from bucket
+        api_key = get_bucket_api_key()
+        headers = {"X-API-Key": api_key} if api_key else {}
+        url = f"{BUCKET_URL}/raw/mcp-database/{task_id}.json"
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200:
+                    return resp.json()
+        except Exception as e:
+            logger.debug("Error fetching individual task %s: %s", task_id, e)
+
+        # Fallback to refreshing aggregate archive
+        tasks = await self.fetch_past_tasks(limit=1000, force_refresh=True)
+        for t in tasks:
+            if t.get("task_id") == task_id:
+                return t
+        return None
+
+    async def sync_task(self, task_dict: Dict[str, Any]) -> bool:
+        """
+        Persists a terminal task record into:
+        1. Aggregated mcp-database/tasks.json
+        2. Individual mcp-database/{task_id}.json
+        """
+        task_id = task_dict.get("task_id")
+        if not task_id:
+            return False
+
+        api_key = get_bucket_api_key()
+        headers = {"X-API-Key": api_key} if api_key else {}
+
+        try:
+            current_tasks = await self.fetch_past_tasks(limit=1000, force_refresh=True)
+            tasks_list = list(current_tasks)
+
+            idx = next((i for i, t in enumerate(tasks_list) if t.get("task_id") == task_id), None)
+            if idx is not None:
+                tasks_list[idx] = task_dict
+            else:
+                tasks_list.insert(0, task_dict)
+
+            tasks_list.sort(
+                key=lambda t: t.get("completed_at") or t.get("created_at") or "",
+                reverse=True
+            )
+
+            # Upload aggregate
+            agg_bytes = json.dumps(tasks_list, indent=2).encode("utf-8")
+            files_agg = {"file": ("tasks.json", agg_bytes, "application/json")}
+            data_agg = {"overwrite": "true", "subfolder": "mcp-database"}
+
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                r1 = await client.post(f"{BUCKET_URL}/upload", files=files_agg, data=data_agg, headers=headers)
+
+                # Upload individual task record
+                ind_bytes = json.dumps(task_dict, indent=2).encode("utf-8")
+                files_ind = {"file": (f"{task_id}.json", ind_bytes, "application/json")}
+                data_ind = {"overwrite": "true", "subfolder": "mcp-database"}
+                r2 = await client.post(f"{BUCKET_URL}/upload", files=files_ind, data=data_ind, headers=headers)
+
+                if r1.status_code == 200:
+                    self._cached_tasks = tasks_list
+                    self._last_fetch_time = time.time()
+                    self._synced_terminal_task_ids.add(task_id)
+                    logger.info("Synced task %s to bucket mcp-database/", task_id)
+                    return True
+                else:
+                    logger.warning("Bucket upload returned status %d: %s", r1.status_code, r1.text)
+                    return False
+        except Exception as e:
+            logger.error("Exception syncing task %s to bucket: %s", task_id, e)
+            return False
+
+task_db_store = TaskDatabaseStore()
 
 # ==============================================================================
 # Authentication Routes (Login & Logout)
@@ -485,10 +630,12 @@ async def dashboard_page(request: Request, user: str = Depends(require_auth)):
     """Main AGYC Control Center dashboard (requires authentication)."""
     status_data = await fetch_agyc_status()
     bucket_data = await fetch_bucket_health()
+    past_tasks = await task_db_store.fetch_past_tasks(limit=5)
     template = jinja_env.get_template("dashboard.html")
     html_content = template.render(
         status=status_data,
         bucket=bucket_data,
+        past_tasks=past_tasks,
         request=request,
         user=user
     )
@@ -588,6 +735,26 @@ async def api_cancel_task(task_id: str, user: str = Depends(require_auth)):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.get("/api/tasks/past")
+@app.get("/mcpd/api/tasks/past")
+async def api_past_tasks(
+    limit: int = Query(5, ge=1, le=50),
+    force: bool = Query(False),
+    user: str = Depends(require_auth),
+):
+    """Returns the most recent past tasks from Google Drive bucket (mcp-database/tasks.json). Limit defaults to 5."""
+    tasks = await task_db_store.fetch_past_tasks(limit=limit, force_refresh=force)
+    return {"tasks": tasks, "count": len(tasks), "limit": limit}
+
+@app.get("/api/tasks/past/{task_id}")
+@app.get("/mcpd/api/tasks/past/{task_id}")
+async def api_past_task_detail(task_id: str, user: str = Depends(require_auth)):
+    """Returns the detailed record of a single past task from Google Drive mcp-database."""
+    task = await task_db_store.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found in archive")
+    return task
+
 @app.get("/api/tasks/{task_id}")
 @app.get("/mcpd/api/tasks/{task_id}")
 async def api_get_task_details(task_id: str, user: str = Depends(require_auth)):
@@ -595,9 +762,16 @@ async def api_get_task_details(task_id: str, user: str = Depends(require_auth)):
     sys.path.insert(0, "/home/azureadmin/agyc-mcp")
     from src.server import get_task_status
     try:
-        return get_task_status(task_id=task_id)
-    except Exception as e:
-        return {"error": str(e)}
+        res = get_task_status(task_id=task_id)
+        if isinstance(res, dict) and not res.get("error"):
+            return res
+    except Exception:
+        pass
+
+    archived = await task_db_store.get_task(task_id)
+    if archived:
+        return archived
+    return {"error": f"Task {task_id} not found"}
 
 @app.post("/api/projects/commit")
 @app.post("/mcpd/api/projects/commit")
