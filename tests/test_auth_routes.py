@@ -32,7 +32,7 @@ class TestLoginGetRoutes:
             "lockout_until": 9999999999.0,
             "last_attempt": 1000.0,
         }
-        response = client.get("/login")
+        response = client.get("/login", headers={"x-forwarded-for": client_ip})
         assert response.status_code == 200
         assert "SECURITY LOCKOUT" in response.text
 

@@ -1,4 +1,5 @@
 import os
+import subprocess
 import tempfile
 import pytest
 from unittest.mock import patch, MagicMock
@@ -49,9 +50,25 @@ class TestSecretKeyAndApiKey:
         with patch("main.SECRET_KEY_PATH", str(dummy_file)):
             assert get_or_create_secret_key() == "file_stored_secret_key_abcdef"
 
+    def test_get_or_create_secret_key_file_read_and_write_failure(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("DASHBOARD_SECRET_KEY", raising=False)
+        dummy_file = str(tmp_path / "secret_key_fail")
+        with patch("main.SECRET_KEY_PATH", dummy_file), \
+             patch("os.path.exists", return_value=True), \
+             patch("builtins.open", side_effect=PermissionError("Cannot read or write")):
+            key = get_or_create_secret_key()
+            assert isinstance(key, str)
+            assert len(key) == 64
+
     def test_get_bucket_api_key_from_env(self, monkeypatch):
         monkeypatch.setenv("BUCKET_API_KEY", "secret_bucket_api_key_xyz")
         assert get_bucket_api_key() == "secret_bucket_api_key_xyz"
+
+    def test_get_bucket_api_key_file_exception(self, monkeypatch):
+        monkeypatch.delenv("BUCKET_API_KEY", raising=False)
+        with patch("os.path.exists", return_value=True), \
+             patch("builtins.open", side_effect=IOError("Corrupt env file")):
+            assert get_bucket_api_key() == ""
 
     def test_get_bucket_api_key_empty_fallback(self, monkeypatch):
         monkeypatch.delenv("BUCKET_API_KEY", raising=False)
@@ -99,3 +116,13 @@ class TestGetGitInfo:
             assert "a1b2c3d" in info["commit"]
             assert info["dirty"] is True
             assert info["dirty_count"] == 2
+
+    def test_get_git_info_subprocess_exception(self, tmp_path):
+        repo_dir = str(tmp_path)
+        os.makedirs(os.path.join(repo_dir, ".git"))
+
+        with patch("subprocess.run", side_effect=subprocess.SubprocessError("Git command crashed")):
+            info = _get_git_info(repo_dir)
+            assert info["has_git"] is True
+            assert info["branch"] == "none"
+            assert info["commit"] == "No commits"
