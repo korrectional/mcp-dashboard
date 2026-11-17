@@ -40,6 +40,8 @@ Styled with the **Neo Kinpaku** aesthetic inspired by [pbakaus/impeccable](https
 | `/mcpd/api/bucket/files/{file_id}` (DELETE) | Authenticated | Deletes/trashes a file from Google Drive |
 | `/mcpd/api/status` | Authenticated | Real-time project telemetry, tasks, and system routes |
 | `/mcpd/api/tasks/dispatch` | Authenticated | Dispatches background task prompt to Antigravity CLI |
+| `/mcpd/api/tasks/past` | Authenticated | Retrieves past tasks from `mcp-database/tasks.json` (default: 5 tasks) |
+| `/mcpd/api/tasks/past/{task_id}` | Authenticated | Fetches full detailed JSON record of a past task from `mcp-database/` |
 | `/mcpd/api/projects/commit` | Authenticated | Triggers one-click checkpoint commit and git push |
 | `/mcpd/api/commands/run` | Authenticated | Executes slash commands (e.g. `/usage`, `/models`, `/status`) |
 
@@ -91,7 +93,26 @@ Styled with the **Neo Kinpaku** aesthetic inspired by [pbakaus/impeccable](https
 
 ---
 
-## 4. Deployment & Maintenance
+## 4. Past Tasks Archive & Bucket Database (`mcp-database/`)
+
+### Google Drive Bucket Database Architecture
+Past tasks executed by the AGYC engine (via web dashboard dispatch or host CLI) are automatically persisted into Google Drive object storage under the `mcp-database/` folder:
+
+- **Aggregated History Archive**:
+  - `mcp-database/tasks.json`: A single JSON array storing past tasks sorted in descending chronological order by completion time.
+- **Granular Task Records**:
+  - `mcp-database/{task_id}.json`: Dedicated JSON record storing full prompt, terminal output (`stdout`/`stderr`), exit code, duration, checkpoints, and execution timings.
+
+### Bandwidth Conservation Strategy
+To prevent high data transfer and protect Google Drive API quotas:
+1. **Paging / Slicing Limit**: The dashboard and API query endpoints only retrieve the **last 5 tasks** by default (`limit=5`).
+2. **In-Memory Cache (TTL 15s)**: Dashboard page reloads and polling checks reuse cached in-memory task lists rather than continuously querying Google Drive.
+3. **On-Demand Log Retrieval**: Full terminal logs and output strings are fetched asynchronously only when an operator clicks **"View Output"** for a specific task.
+4. **Direct Raw Download**: Operators can download individual JSON files or the full aggregated database with dedicated attachment download links.
+
+---
+
+## 5. Deployment & Maintenance
 
 The service runs under systemd on the host VM:
 ```bash
