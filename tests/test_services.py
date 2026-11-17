@@ -202,3 +202,42 @@ class TestFetchAgycStatus:
                 assert res["online"] is False
                 assert res["projects"] == []
                 assert res["tasks"] == []
+
+    @pytest.mark.asyncio
+    async def test_fetch_live_tasks_from_list_tasks(self):
+        from completions_store import fetch_live_tasks
+        mock_tasks = [
+            {"task_id": "task_1", "status": "running", "prompt": "working on task"},
+            {"task_id": "task_2", "status": "completed", "prompt": "done"}
+        ]
+        with patch("completions_store.query_mcp_tool", new_callable=AsyncMock, return_value=mock_tasks):
+            tasks = await fetch_live_tasks()
+            assert len(tasks) == 2
+            assert tasks[0]["task_id"] == "task_1"
+            assert tasks[0]["status"] == "running"
+
+    @pytest.mark.asyncio
+    async def test_fetch_live_tasks_fallback_to_project_queue(self):
+        from completions_store import fetch_live_tasks
+        # list_tasks returns no active tasks
+        mock_list = [{"task_id": "task_old", "status": "completed"}]
+        mock_queue = {
+            "project_name": "p1",
+            "active_tasks": [{"task_id": "task_queued_active", "state": "RUNNING", "prompt": "live work"}],
+            "active_count": 1,
+            "queued_tasks": [{"task_id": "task_pending", "status": "queued"}]
+        }
+        async def mock_query(tool_name, args, timeout=None):
+            if tool_name == "list_tasks":
+                return mock_list
+            if tool_name == "get_project_queue":
+                return mock_queue
+            return None
+
+        with patch("completions_store.query_mcp_tool", side_effect=mock_query):
+            tasks = await fetch_live_tasks(projects=[{"name": "p1"}])
+            assert len(tasks) == 3
+            ids = [t["task_id"] for t in tasks]
+            assert "task_queued_active" in ids
+            assert "task_pending" in ids
+            assert "task_old" in ids

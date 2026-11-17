@@ -690,12 +690,31 @@
                 <div class="ks-tile-sub">Workspace /home/azureadmin/mcp/projects/</div>
             </div>
 
+            {% set all_raw_tasks = status.tasks if status.tasks is defined else [] %}
+            {% set active_raw_tasks = status.active_tasks if status.active_tasks is defined and status.active_tasks else [] %}
+            {% set ns_tasks = namespace(running_tasks=[]) %}
+            {% if active_raw_tasks %}
+                {% set ns_tasks.running_tasks = active_raw_tasks %}
+            {% else %}
+                {% for t in all_raw_tasks %}
+                    {% set t_st = (t.status or t.state or '') | lower %}
+                    {% if t_st in ['running', 'pending', 'queued', 'in_progress', 'working'] %}
+                        {% set ns_tasks.running_tasks = ns_tasks.running_tasks + [t] %}
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+            {% set live_running_count = status.active_count if (status.active_count is defined and status.active_count > (ns_tasks.running_tasks | length)) else (ns_tasks.running_tasks | length) %}
+
             <div class="ks-tile">
                 <div class="ks-tile-eyebrow">
                     <span>ACTIVE TASKS</span>
-                    <span id="badge-active-tasks" class="ks-badge ks-badge-patina">0 RUNNING</span>
+                    {% if live_running_count > 0 %}
+                        <span id="badge-active-tasks" class="ks-badge ks-badge-patina"><span class="ks-pulse" style="margin-right: 4px;"></span>{{ live_running_count }} RUNNING</span>
+                    {% else %}
+                        <span id="badge-active-tasks" class="ks-badge ks-badge-neutral">0 RUNNING</span>
+                    {% endif %}
                 </div>
-                <div class="ks-tile-value" id="val-active-tasks">0</div>
+                <div class="ks-tile-value" id="val-active-tasks">{{ live_running_count }}</div>
                 <div class="ks-tile-sub">Agent self-commits via prompt directives</div>
             </div>
 
@@ -849,16 +868,45 @@
             <div class="ks-section-head">
                 <div class="ks-section-title">
                     <span>LIVE TASK EXECUTION</span>
-                    <span id="active-tasks-count" class="ks-badge ks-badge-patina">0 ACTIVE</span>
+                    <span id="active-tasks-count" class="ks-badge {% if live_running_count > 0 %}ks-badge-patina{% else %}ks-badge-neutral{% endif %}">{{ live_running_count }} ACTIVE</span>
                 </div>
                 <button onclick="refreshLiveStatus()" class="ks-btn ks-btn-secondary" style="font-family: var(--ks-font-mono); font-size: 0.75rem;">↻ Poll Now</button>
             </div>
 
             <div id="active-tasks-container">
+                {% if ns_tasks.running_tasks | length == 0 %}
                 <div class="ks-tile" style="text-align: center; padding: 32px; color: var(--ks-text-muted);">
                     <div style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">NO ACTIVE TASKS CURRENTLY RUNNING</div>
                     <div style="font-size: 0.75rem; color: var(--ks-text-faint); margin-top: 6px;">Dispatch a new coding session to observe real-time execution.</div>
                 </div>
+                {% else %}
+                {% for t in ns_tasks.running_tasks %}
+                    {% set tid = t.task_id or t.id or 'task_unknown' %}
+                    {% set tproj = t.project_name or t.project or 'project' %}
+                    {% set tprompt = t.prompt or t.task or '' %}
+                    {% set tstatus = (t.status or t.state or 'running') | upper %}
+                    <div class="ks-task-item">
+                        <div class="ks-task-info">
+                            <div class="ks-task-header">
+                                <span class="ks-pulse"></span>
+                                <span class="ks-task-id">{{ tid }}</span>
+                                <span class="ks-badge ks-badge-gold">{{ tproj }}</span>
+                                <span class="ks-badge ks-badge-patina">{{ tstatus }}</span>
+                            </div>
+                            <div class="ks-task-prompt" style="font-family: var(--ks-font-mono); font-size: 0.8125rem;">{{ tprompt }}</div>
+                            <div class="ks-task-meta">
+                                <span>Started: {{ t.started_at or 'Just now' }}</span>
+                                <span>Model: {{ t.model or 'default' }}</span>
+                                <span>Effort: {{ t.effort or 'default' }}</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="openStdinModal('{{ tid }}', '{{ tproj }}')" class="ks-btn ks-btn-secondary" style="font-size: 0.75rem;">⌨ Send Input</button>
+                            <button onclick="cancelTask('{{ tid }}')" class="ks-btn ks-btn-danger" style="font-size: 0.75rem;">Cancel</button>
+                        </div>
+                    </div>
+                {% endfor %}
+                {% endif %}
             </div>
         </section>
 
@@ -1228,15 +1276,76 @@
                 if (!res.ok) return;
                 const data = await res.json();
                 
-                // Update tasks
-                const allTasks = data.tasks || data.agyc?.tasks || [];
-                const running = allTasks.filter(t => t.status === 'running' || t.status === 'pending' || t.status === 'queued');
-                
-                document.getElementById('val-active-tasks').textContent = running.length;
+                // Collect and normalize all tasks across all payload structures
+                let taskList = [];
+                if (Array.isArray(data.tasks)) {
+                    taskList.push(...data.tasks);
+                } else if (data.tasks && typeof data.tasks === 'object') {
+                    if (Array.isArray(data.tasks.tasks)) taskList.push(...data.tasks.tasks);
+                    if (Array.isArray(data.tasks.active_tasks)) taskList.push(...data.tasks.active_tasks);
+                }
+                if (Array.isArray(data.active_tasks)) {
+                    taskList.push(...data.active_tasks);
+                }
+                if (Array.isArray(data.agyc?.tasks)) {
+                    taskList.push(...data.agyc.tasks);
+                }
+                if (Array.isArray(data.agyc?.active_tasks)) {
+                    taskList.push(...data.agyc.active_tasks);
+                }
+
+                // Deduplicate tasks by unique task ID
+                const taskMap = new Map();
+                for (const t of taskList) {
+                    if (!t || typeof t !== 'object') continue;
+                    const tid = t.task_id || t.id || JSON.stringify(t);
+                    if (!taskMap.has(tid)) {
+                        taskMap.set(tid, t);
+                    } else {
+                        taskMap.set(tid, { ...taskMap.get(tid), ...t });
+                    }
+                }
+                const allTasks = Array.from(taskMap.values());
+
+                // Filter for running / pending / queued / active tasks (case-insensitive, status or state)
+                const activeStatusSet = new Set(['running', 'pending', 'queued', 'in_progress', 'working']);
+                let running = allTasks.filter(t => {
+                    const st = String(t.status || t.state || '').toLowerCase().trim();
+                    return activeStatusSet.has(st);
+                });
+
+                // Include any active_tasks explicitly passed in data
+                if (Array.isArray(data.active_tasks) && data.active_tasks.length > 0) {
+                    const runningIds = new Set(running.map(t => t.task_id || t.id));
+                    for (const at of data.active_tasks) {
+                        const tid = at.task_id || at.id;
+                        if (tid && !runningIds.has(tid)) {
+                            running.push(at);
+                            runningIds.add(tid);
+                        }
+                    }
+                }
+
+                // Total active running count
+                let runningCount = running.length;
+                if (typeof data.active_count === 'number' && data.active_count > runningCount) {
+                    runningCount = data.active_count;
+                }
+
+                const valActiveTasks = document.getElementById('val-active-tasks');
+                if (valActiveTasks) valActiveTasks.textContent = runningCount;
+
                 const badge = document.getElementById('badge-active-tasks');
-                badge.textContent = `${running.length} RUNNING`;
-                badge.className = running.length > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-neutral';
-                document.getElementById('active-tasks-count').textContent = `${running.length} ACTIVE`;
+                if (badge) {
+                    badge.innerHTML = runningCount > 0 ? `<span class="ks-pulse" style="margin-right: 4px;"></span>${runningCount} RUNNING` : `${runningCount} RUNNING`;
+                    badge.className = runningCount > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-neutral';
+                }
+
+                const activeTasksCount = document.getElementById('active-tasks-count');
+                if (activeTasksCount) {
+                    activeTasksCount.textContent = `${runningCount} ACTIVE`;
+                    activeTasksCount.className = runningCount > 0 ? 'ks-badge ks-badge-patina' : 'ks-badge ks-badge-neutral';
+                }
 
                 // Update 4-Hour Autonomous Completion Loops
                 const rawComp = data.completion_sessions || data.completions || data.sessions || [];
@@ -1269,10 +1378,10 @@
                 renderCompletionLoops(compSessions);
 
                 // If a task just completed, auto refresh past tasks archive
-                if (lastRunningCount > running.length) {
+                if (lastRunningCount > runningCount) {
                     refreshPastTasks();
                 }
-                lastRunningCount = running.length;
+                lastRunningCount = runningCount;
 
                 const container = document.getElementById('active-tasks-container');
                 if (running.length === 0) {
@@ -1283,10 +1392,10 @@
                         </div>`;
                 } else {
                     container.innerHTML = running.map(t => {
-                        const tid = t.task_id || t.id;
+                        const tid = t.task_id || t.id || 'task_unknown';
                         const tproj = t.project_name || t.project || 'project';
                         const tprompt = t.prompt || t.task || '';
-                        const tstatus = (t.status || 'running').toUpperCase();
+                        const tstatus = (t.status || t.state || 'running').toUpperCase();
                         const tstarted = t.started_at ? (typeof t.started_at === 'number' ? new Date(t.started_at * 1000).toLocaleTimeString() : t.started_at) : 'Just now';
                         return `
                         <div class="ks-task-item">

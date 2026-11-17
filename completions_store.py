@@ -553,3 +553,108 @@ async def start_completion_session(
     except Exception as e:
         logger.error("start_completion_session fallback error: %s", e)
         return {"success": False, "error": str(e)}
+
+
+async def fetch_live_tasks(projects: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+    """
+    Fetches real-time tasks from agyc-mcp server (port 8001):
+    1. Queries MCP tool 'list_tasks' with high limit (up to 100).
+    2. Fallback / supplementary check of 'get_project_queue' across projects to guarantee
+       no active / queued tasks are missed.
+    3. Normalizes and deduplicates tasks by task_id / id.
+    """
+    task_map: Dict[str, Dict[str, Any]] = {}
+    active_statuses = {"running", "pending", "queued", "in_progress", "working"}
+
+    # 1. Query agyc-mcp via MCP tool 'list_tasks'
+    mcp_res = await query_mcp_tool("list_tasks", {"limit": 100})
+    raw_list = []
+    if isinstance(mcp_res, list):
+        raw_list = mcp_res
+    elif isinstance(mcp_res, dict):
+        if "tasks" in mcp_res and isinstance(mcp_res["tasks"], list):
+            raw_list = mcp_res["tasks"]
+        elif "result" in mcp_res and isinstance(mcp_res["result"], list):
+            raw_list = mcp_res["result"]
+        elif "active_tasks" in mcp_res and isinstance(mcp_res["active_tasks"], list):
+            raw_list = mcp_res["active_tasks"]
+
+    for item in raw_list:
+        if isinstance(item, dict):
+            tid = item.get("task_id") or item.get("id")
+            if tid:
+                task_map[tid] = item
+
+    # Check whether we found any active/running tasks
+    has_active = any(
+        str(t.get("status") or t.get("state") or "").lower() in active_statuses
+        for t in task_map.values()
+    )
+
+    # 2. If no active tasks were found in list_tasks, check project queues
+    if not has_active and projects:
+        try:
+            queue_futs = [
+                query_mcp_tool("get_project_queue", {"project_name": p.get("name")}, timeout=1.5)
+                for p in projects
+                if isinstance(p, dict) and p.get("name")
+            ]
+            queues = await asyncio.gather(*queue_futs, return_exceptions=True)
+            for q in queues:
+                if isinstance(q, dict):
+                    q_active = q.get("active_tasks")
+                    if isinstance(q_active, list):
+                        for at in q_active:
+                            if isinstance(at, dict):
+                                tid = at.get("task_id") or at.get("id")
+                                if tid:
+                                    task_map[tid] = at
+                    elif isinstance(q.get("active_task"), dict):
+                        at = q["active_task"]
+                        tid = at.get("task_id") or at.get("id")
+                        if tid:
+                            task_map[tid] = at
+
+                    q_queued = q.get("queued_tasks")
+                    if isinstance(q_queued, list):
+                        for qt in q_queued:
+                            if isinstance(qt, dict):
+                                tid = qt.get("task_id") or qt.get("id")
+                                if tid:
+                                    task_map[tid] = qt
+        except Exception as e:
+            logger.debug("Project queue check exception: %s", e)
+
+    # 3. Sort tasks so active tasks are first, followed by timestamp descending
+    def _task_sort_key(t: Dict[str, Any]):
+        st = str(t.get("status") or t.get("state") or "").lower()
+        is_active = 1 if st in active_statuses else 0
+        ts = t.get("started_at") or t.get("created_at") or ""
+        return (is_active, ts)
+
+    sorted_tasks = sorted(task_map.values(), key=_task_sort_key, reverse=True)
+    return sorted_tasks
+
+
+async def get_live_task_status(task_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves live task status from agyc-mcp server (port 8001)."""
+    mcp_res = await query_mcp_tool("get_task_status", {"task_id": task_id})
+    if isinstance(mcp_res, dict) and not mcp_res.get("error") and mcp_res.get("status") != "not_found":
+        return mcp_res
+    return None
+
+
+async def cancel_live_task(task_id: str) -> Optional[Dict[str, Any]]:
+    """Cancels a live task on agyc-mcp server (port 8001)."""
+    mcp_res = await query_mcp_tool("cancel_task", {"task_id": task_id})
+    if isinstance(mcp_res, dict) and mcp_res.get("cancelled") is True:
+        return {"success": True, "task_id": task_id, "cancelled": True}
+    return None
+
+
+async def send_live_task_input(task_id: str, input_text: str) -> Optional[Dict[str, Any]]:
+    """Sends interactive input to a running task on agyc-mcp server (port 8001)."""
+    mcp_res = await query_mcp_tool("send_input_to_task", {"task_id": task_id, "input_text": input_text})
+    if isinstance(mcp_res, dict) and mcp_res.get("success") is True:
+        return mcp_res
+    return None

@@ -88,6 +88,34 @@ class TestDashboardPageRoutes:
             assert "AGYC" in response.text or "DASHBOARD" in response.text
             assert AUTH_USERNAME in response.text
 
+    @pytest.mark.parametrize("path", ["/", "/mcpd", "/mcpd/"])
+    def test_dashboard_authenticated_with_active_tasks(self, auth_client, path):
+        mock_status = {
+            "projects": [{"name": "proj1", "branch": "main", "commit": "abc - init", "dirty": False, "is_managed": True}],
+            "managed_projects": [{"name": "proj1", "branch": "main", "commit": "abc - init", "dirty": False, "is_managed": True}],
+            "host_services": [],
+            "tasks": [
+                {"task_id": "task_active_99", "project_name": "proj1", "prompt": "build awesome feature", "status": "running", "started_at": "12:00:00"}
+            ],
+            "active_tasks": [
+                {"task_id": "task_active_99", "project_name": "proj1", "prompt": "build awesome feature", "status": "running", "started_at": "12:00:00"}
+            ],
+            "active_count": 1,
+            "routes": [],
+            "online": True
+        }
+        mock_bucket = {"status": "ok", "drive_authenticated": True}
+
+        with patch("main.fetch_agyc_status", new_callable=AsyncMock, return_value=mock_status), \
+             patch("main.fetch_bucket_health", new_callable=AsyncMock, return_value=mock_bucket):
+            response = auth_client.get(path)
+            assert response.status_code == 200
+            assert "1 RUNNING" in response.text
+            assert 'id="val-active-tasks">1</div>' in response.text
+            assert "1 ACTIVE" in response.text
+            assert "task_active_99" in response.text
+            assert "build awesome feature" in response.text
+
 
 class TestBucketManagerPageRoutes:
     """Tests the interactive bucketloader file manager page."""
